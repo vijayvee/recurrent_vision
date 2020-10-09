@@ -29,15 +29,19 @@ class V1Net_BN_cell(rnn_cell_impl.RNNCell):
                name="v1net_cell"):
     """Construct V1net cell.
     Args:
-      conv_ndims: Convolution dimensionality (1, 2 or 3).
       input_shape: Shape of the input as int tuple, excluding the batch size.
       output_channels: int, number of output channels of the conv LSTM.
       kernel_shape: Shape of kernel as an int tuple (of size 1, 2 or 3).
+      inh_mult: Float multiplier for 
+              inhibitory spatial convolution size
+      exc_mult: Float multiplier for 
+              excitatory spatial convolution size
+      activation: String activation function for v1net's output
       use_bias: (bool) Use bias in convolutions.
-      skip_connection: If set to `True`, concatenate the input to the
-        output of the conv LSTM. Default: `False`.
+      timesteps: Integer Number of recurrent timesteps
       forget_bias: Forget bias.
       initializers: Unused.
+      training: Boolean training flag
       name: Name of the module.
     Raises:
       ValueError: If `skip_connection` is `True` and stride is different from 1
@@ -57,8 +61,6 @@ class V1Net_BN_cell(rnn_cell_impl.RNNCell):
     self.initializers = initializers
     self.timesteps = timesteps
     self._total_output_channels = output_channels
-    if self._skip_connection:
-      self._total_output_channels += self._input_shape[-1]
 
     state_size = tensor_shape.TensorShape(
       self._input_shape[:-1] + [self._output_channels])
