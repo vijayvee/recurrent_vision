@@ -352,6 +352,7 @@ vgg_19.default_image_size = 224
 
 
 def vgg_16_hed(inputs,
+              num_classes=1,
               is_training=True,
               add_v1net=False,
               reuse=None,

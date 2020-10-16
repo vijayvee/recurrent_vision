@@ -15,8 +15,7 @@ class VGG(ModelBuilder):
   def preprocess(self, images):
     """Model-specific preprocessing of input images."""
     images = tf.image.resize(images, 
-                             [self.image_size,
-                             self.image_size],
+                             self.image_size,
                              )
     return images
 
