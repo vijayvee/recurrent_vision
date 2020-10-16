@@ -371,7 +371,7 @@ def vgg_16_hed(inputs,
     end_points: a dict of tensors with intermediate activations.
   """
   side_outputs = []
-  n, h, w, c = inputs.shape.as_list()
+  _, h, w, _ = inputs.shape.as_list()
   with tf.variable_scope(
       scope, 'vgg_16', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.original_name_scope + '_end_points'
@@ -427,9 +427,12 @@ def vgg_16_hed(inputs,
       side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
                               for side_output in side_outputs]
       side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
+      fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
+      end_points['fused_predictions'] = fused_predictions
       side_outputs_fullres = tf.reshape(side_outputs_fullres,
                                         (-1, h, w, 1))
-      return side_outputs_fullres, end_points
+      end_points['side_outputs_fullres'] = side_outputs_fullres
+      return fused_predictions, end_points
 
 
 # Alias

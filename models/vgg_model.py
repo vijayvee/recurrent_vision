@@ -10,7 +10,7 @@ class VGG(ModelBuilder):
   def __init__(self, model_config):
     self.model_config = model_config
     self.image_size = model_config.image_size
-    self.vgg_depth = model_config.vgg_depth    
+    self.model_name = model_config.model_name
     
   def preprocess(self, images):
     """Model-specific preprocessing of input images."""
@@ -23,13 +23,17 @@ class VGG(ModelBuilder):
   def build_model(self, images, is_training=True):
     """Build model with input images."""
     net = self.preprocess(images)
+    if is_training:
+      net = self.augment_images(net)
     model_config = self.model_config
-    if self.vgg_depth == 16:
-      model_fn = vgg.vgg_16
-    elif self.vgg_depth == 19:
+    if self.model_name.startswith("vgg_16_hed"):
+      model_fn = vgg.vgg_16_hed
+    elif self.model_name.startswith("vgg_19"):
       model_fn = vgg.vgg_19
+    elif self.model_name.startswith("vgg_16"):
+      model_fn = vgg.vgg_16
     all_vars = [var for var in tf.global_variables()]
-    net, _ = model_fn(inputs=net,
+    net, endpoints = model_fn(inputs=net,
                       num_classes=model_config.num_classes,
                       is_training=is_training,
                       add_v1net=model_config.add_v1net,
@@ -37,8 +41,8 @@ class VGG(ModelBuilder):
                   #  v1_kernel_size=model_config.v1_kernel_size,
                    )
     model_vars = [var for var in tf.global_variables()]
-    self.model_vars = set(all_vars).difference(set(model_vars))
-    return net
+    self.model_vars = set(model_vars).difference(set(all_vars))
+    return net, endpoints
   
   def restore_checkpoint(self, sess, checkpoint_path):
     """Function to restore weights from checkpoint."""
