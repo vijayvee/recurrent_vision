@@ -6,7 +6,7 @@ class ConfigDict(object):
 def v1net_config():
   """Return configuration to build shallow V1Net cnn."""
   config = ConfigDict()
-  config.image_size = 256
+  config.image_size = (256, 256)
   config.timesteps = 7
   config.num_classes = 2
   config.v1net_filters = 32
