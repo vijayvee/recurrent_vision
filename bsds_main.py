@@ -2,7 +2,7 @@
 import os
 from absl import app
 from absl import flags
-from datetime import time
+import time
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import numpy as np
 
@@ -10,6 +10,8 @@ from recurrent_vision.data_provider import BSDSDataProvider
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
 from recurrent_vision.models.vgg_model import VGG
 from recurrent_vision.optimizers import get_optimizer
+
+tf.disable_v2_behavior()
 
 FLAGS = flags.FLAGS
 
@@ -19,8 +21,10 @@ flags.DEFINE_float("weight_decay", 1e-4,
                    "weight decay multiplier")
 flags.DEFINE_integer("num_epochs", 100,
                      "Number of training epochs")
-flags.DEFINE_integer("batch_size", 1,
-                     "Mini batch size")
+flags.DEFINE_integer("train_batch_size", 1,
+                     "Training minibatch size")
+flags.DEFINE_integer("eval_batch_size", 1,
+                     "Evaluation minibatch size")
 flags.DEFINE_integer("evaluate_every", 1,
                      "Evaluation frequency (every x epochs)")
 flags.DEFINE_string("experiment_name", "",
@@ -31,6 +35,10 @@ flags.DEFINE_boolean("use_tpu", True,
                      "Whether to use TPU for training")
 flags.DEFINE_string("tpu_name", "",
                     "Name of TPU to use")
+flags.DEFINE_string("tpu_zone", "europe-west4-a",
+                    "TPU zone (europe-west4-a, etc.)")
+flags.DEFINE_string("data_dir", "",
+                    "Data directory with BSDS500 tfrecords")
 
 # TODO(vveeraba): add learning rate decay
 # TODO(vveeraba): add checkpoint restoring
@@ -45,6 +53,7 @@ def model_fn(features, labels, mode, params):
     mode: (String) train/eval/predict modes.
     params: (Dict) of model training parameters.
   """
+  eval_metrics, train_op, loss = None, None, None
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_16_hed_config()
   vgg = VGG(cfg)
@@ -53,7 +62,7 @@ def model_fn(features, labels, mode, params):
   # TODO(vveeraba): Add vgg restore checkpoint
   # Tile ground truth for 5 side outputs
   side_predictions = endpoints["side_outputs_fullres"]
-  side_labels = tf.tile(labels, [5, 1, 1, 1])
+  side_labels = tf.tile(labels["label"], [5, 1, 1, 1])
 
   # output predictions
   if mode == tf.estimator.ModeKeys.PREDICT:
@@ -80,6 +89,8 @@ def model_fn(features, labels, mode, params):
                       pos_weight=pos_weight
                       )
   loss = loss_side + loss_fuse
+  # TODO(vveeraba): check below averaging
+  loss = tf.reduce_mean(loss)
   
   if training:
     global_step = tf.train.get_global_step()
@@ -93,7 +104,7 @@ def model_fn(features, labels, mode, params):
   if mode == tf.estimator.ModeKeys.EVAL:
     # Define evaluation metrics:
     def metric_fn(labels, logits):
-      xentropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels,
+      xentropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels['label'],
                                                          logits=logits)
       return {
               'xentropy': xentropy,
@@ -106,48 +117,60 @@ def model_fn(features, labels, mode, params):
                                            eval_metrics=eval_metrics,
                                            )
 
+
 def get_input_fn_train(params):
   """Input function for data serving during model training."""
-  dataset = BSDSDataProvider(params["batch_size"],
+  num_examples = 300
+  def input_fn(params):
+    dataset = BSDSDataProvider(params["train_batch_size"],
                              is_training=True,
                              data_dir=params["data_dir"])
-  return dataset, dataset.input_fn
+    return dataset.dataset
+  return num_examples, input_fn
 
 def get_input_fn_validation(params):
   """Input function for data serving during model evaluation."""
-  dataset = BSDSDataProvider(params["batch_size"],
+  num_examples = 100
+  def input_fn(params):
+    dataset = BSDSDataProvider(params["eval_batch_size"],
                              is_training=False,
                              data_dir=params["data_dir"])
-  return dataset, dataset.input_fn
+    return dataset.dataset
+  return num_examples, input_fn
 
-def main():
+def main(argv):
+  del argv  # unused here
+  gcs_root = "gs://v1net-tpu-bucket/"
   gcs_path = "gs://v1net-tpu-bucket/bsds_experiments/"
   args = FLAGS.flag_values_dict()
-  model_dir = os.path.join(gcs_path, "model_dir_%s" % args["expt_name"])
+  model_dir = os.path.join(gcs_path, "model_dir_%s" % args["experiment_name"])
+  if not tf.gfile.Exists(model_dir):
+    tf.gfile.MakeDirs(model_dir)
   args["model_dir"] = model_dir
 
   rand_seed = np.random.randint(10000)
   tf.set_random_seed(rand_seed)
   args["random_seed"] = rand_seed
   warm_start_settings = None
+  args["data_dir"] = os.path.join(gcs_root, args["data_dir"])
 
-  dataset_train, input_fn_train = get_input_fn_train(args)
-  dataset_val, input_fn_val = get_input_fn_validation(args)
-  args["num_train_examples"] = dataset_train.num_examples * args["num_epochs"]
-  args["num_train_steps"] = args["num_train_examples"] // args["batch_size"]
+  num_train_examples, input_fn_train = get_input_fn_train(args)
+  num_eval_examples, input_fn_val = get_input_fn_validation(args)
+  args["num_train_examples"] = num_train_examples * args["num_epochs"]
+  args["num_train_steps"] = args["num_train_examples"] // args["train_batch_size"]
   num_train_steps = args["num_train_steps"]
   num_train_steps_per_epoch = num_train_steps // args["num_epochs"]
   
-  args["num_eval_examples"] = dataset_val.num_examples
-  args["num_eval_steps"] = args["num_eval_examples"] // args["batch_size"]
+  args["num_eval_examples"] = num_eval_examples
+  args["num_eval_steps"] = args["num_eval_examples"] // args["eval_batch_size"]
   num_eval_steps = args["num_eval_steps"]
 
-  eval_every = int(args["eval_every"] * num_train_steps_per_epoch // args["batch_size"])
-  tf.logging.info("Evaluating every %s steps"%(eval_every))
+  evaluate_every = int(args["evaluate_every"] * num_train_steps_per_epoch // args["train_batch_size"])
+  tf.logging.info("Evaluating every %s steps"%(evaluate_every))
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
                 args["tpu_name"] if args["use_tpu"] else "",
-                zone="europe-west4-a",
+                zone=args["tpu_zone"],
                 project="desalab-tpu")
   config = tf.estimator.tpu.RunConfig(
                 cluster=tpu_cluster_resolver,
@@ -163,8 +186,8 @@ def main():
                 config=config,
                 params=args,
                 warm_start_from=warm_start_settings,
-                train_batch_size=args["batch_size"],
-                eval_batch_size=args["batch_size"],
+                train_batch_size=args["train_batch_size"],
+                eval_batch_size=args["eval_batch_size"],
                 )
 
   try:
@@ -175,7 +198,7 @@ def main():
   start_timestamp = time.time()
   while current_step < num_train_steps:
     # Train until next evaluation step
-    next_checkpoint = min(current_step + eval_every,
+    next_checkpoint = min(current_step + evaluate_every,
                           num_train_steps)
     classifier.train(
         input_fn=input_fn_train, max_steps=next_checkpoint)
@@ -197,6 +220,6 @@ def main():
 
 if __name__=="__main__":
   tf.logging.set_verbosity(tf.logging.INFO)
-  app.run(main())
+  app.run(main)
 
 
