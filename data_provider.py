@@ -13,13 +13,16 @@ class BSDSDataProvider:
                is_training,
                data_dir=None,
                ):
+    # TODO(vveeraba): Add custom image size
     self.batch_size = batch_size
     threads = multiprocessing.cpu_count()
     # load tfrecord files
     if is_training:
+      self.training = True
       glob_pattern = "%s/train*.tfrecord" % data_dir
       self.num_examples = 300
     else:
+      self.training=False
       glob_pattern = "%s/val*.tfrecord" % data_dir
       self.num_examples = 100
     files = tf.data.Dataset.list_files(glob_pattern, shuffle=is_training)
@@ -30,20 +33,21 @@ class BSDSDataProvider:
     dataset = dataset.shuffle(buffer_size=8 * self.batch_size, seed=None)
     dataset = dataset.repeat(count=None)
     # use decode function to retrieve images and labels
-    dataset = dataset.map(map_func=lambda example: self.decode_feats(example,
-                                                                     is_training),
-                          num_parallel_calls=threads)
-    # batch the examples
-    dataset = dataset.batch(batch_size=self.batch_size)
-    self.images, self.labels = dataset.make_one_shot_iterator().get_next()
+    dataset = dataset.apply(
+                    tf.data.experimental.map_and_batch(self.decode_feats,
+                                                        batch_size=self.batch_size,
+                                                        num_parallel_batches=threads,
+                                                        drop_remainder=True))
+    self.dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
   def fetch_dataset(self, filename):
-      buffer_size = 8 * 1024 * 1024  # 8 MiB per file
-      dataset = tf.data.TFRecordDataset(filename, buffer_size=buffer_size)
-      return dataset
+    buffer_size = 8 * 1024 * 1024  # 8 MiB per file
+    dataset = tf.data.TFRecordDataset(filename, buffer_size=buffer_size)
+    return dataset
 
-  def decode_feats(self, tfrecord, training):
+  def decode_feats(self, tfrecord):
     """Decode features written in tfrecords."""
+    training = self.training
     split = "train"
     if not training:
         split = "val"
@@ -62,7 +66,3 @@ class BSDSDataProvider:
     img = tf.reshape(img, [321, 481, 3])
     label = tf.reshape(label, [321, 481, 1])
     return {"image": img}, {"label": label}
-  
-  def input_fn(self, params):
-    """Return tensors for input and labels."""
-    return self.images, self.labels
