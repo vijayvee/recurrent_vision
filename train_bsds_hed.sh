@@ -10,9 +10,10 @@ EVALUATE_EVERY=2
 EXPERIMENT_NAME="bsds_vgg_hed_test"
 OPTIMIZER="adam"
 USE_TPU=True
-TPU_NAME="test-tpu"
+TPU_NAME=$1
 DATA_DIR="bsds_data/bsds500"
 
+echo "Running on {$1}"
 python bsds_main.py \
 	--learning_rate=${LEARNING_RATE} \
 	--weight_decay=${WEIGHT_DECAY} \

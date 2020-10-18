@@ -221,7 +221,7 @@ def main(argv):
                           num_train_steps, elapsed_time)
 
 if __name__=="__main__":
-  tf.logging.set_verbosity(tf.logging.INFO)
+  tf.logging.set_verbosity('INFO')
   app.run(main)
 
 

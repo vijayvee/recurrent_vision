@@ -41,8 +41,6 @@ class BSDSDataProvider:
                                                    num_parallel_batches=threads,
                                                    drop_remainder=True))
     self.dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-    iterator = tf.make_one_shot_iterator(dataset)
-    self.images, self.labels, self.mask = iterator.get_next()
 
   def fetch_dataset(self, filename):
     """Fetch tf.data.Dataset from tfrecord filename."""
