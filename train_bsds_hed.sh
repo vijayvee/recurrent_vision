@@ -8,6 +8,7 @@ TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
 EVALUATE_EVERY=2
 EXPERIMENT_NAME="bsds_vgg_hed_test"
+CHECKPOINT="models/pretrained_nets/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="adam"
 USE_TPU=True
 TPU_NAME=$1
@@ -22,6 +23,7 @@ python bsds_main.py \
 	--eval_batch_size=${EVAL_BATCH_SIZE} \
 	--evaluate_every=${EVALUATE_EVERY} \
 	--experiment_name=${EXPERIMENT_NAME} \
+	--checkpoint=${CHECKPOINT} \
 	--optimizer=${OPTIMIZER} \
 	--use_tpu=${USE_TPU} \
 	--tpu_name=${TPU_NAME} \

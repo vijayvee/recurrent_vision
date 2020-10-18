@@ -29,6 +29,8 @@ flags.DEFINE_integer("evaluate_every", 1,
                      "Evaluation frequency (every x epochs)")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
+flags.DEFINE_string("checkpoint", "",
+                    "Checkpoint filename")
 flags.DEFINE_string("optimizer", "",
                     "Optimizer algorithm (Adam, SGD, etc.)")
 flags.DEFINE_boolean("use_tpu", True,
@@ -55,6 +57,7 @@ def model_fn(features, labels, mode, params):
     params: (Dict) of model training parameters.
   """
   eval_metrics, train_op, loss = None, None, None
+  scaffold_fn = None
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_16_hed_config()
   vgg = VGG(cfg)
@@ -94,6 +97,7 @@ def model_fn(features, labels, mode, params):
   loss = tf.reduce_mean(loss)
   
   if training:
+    scaffold_fn = get_scaffold_fn()
     global_step = tf.train.get_global_step()
     optimizer = get_optimizer(FLAGS.learning_rate,
                               FLAGS.optimizer,
@@ -116,6 +120,7 @@ def model_fn(features, labels, mode, params):
   return tf.estimator.tpu.TPUEstimatorSpec(train_op=train_op,
                                            mode=mode, loss=loss, 
                                            eval_metrics=eval_metrics,
+                                           scaffold_fn=scaffold_fn,
                                            )
 
 
@@ -138,6 +143,21 @@ def get_input_fn_validation(params):
                              data_dir=params["data_dir"])
     return dataset.dataset
   return num_examples, input_fn
+
+def get_scaffold_fn():
+  """Scaffold function for initialization."""
+  def scaffold_fn():
+    latest_checkpoint = FLAGS.checkpoint
+    model_vars = [var.name[:-2] for var in list(tf.global_variables())]
+    # Get checkpoint vars
+    ckpt_vars = list(tf.train.list_variables(latest_checkpoint))
+    ckpt_vars = [var for var, var_shape in ckpt_vars]
+    # Restore vars = checkpoint_vars.intersection(model_vars)
+    restore_vars = list(set(ckpt_vars).intersection(set(model_vars)))
+    restore_vars = {var.name[:-2]: var for var in tf.global_variables()
+                    if var.name[:-2] in restore_vars}
+    tf.train.init_from_checkpoint(latest_checkpoint, restore_vars)
+  return scaffold_fn
 
 def main(argv):
   del argv  # unused here

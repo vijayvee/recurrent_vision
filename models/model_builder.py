@@ -18,8 +18,10 @@ class ModelBuilder:
 
   def augment_images(self, input_images):
     """Augment minibatch of images."""
-    # TODO(vveeraba): Check the parameters of the following transformations
-    print('Augmenting images..')
+    # TODO(vveeraba): Add unit test for bounds of output images
+    # TODO(vveeraba): Add fixed image rotations
+    # TODO(vveeraba): Check parameters of the following transformations
+    tf.logging.INFO('Augmenting images..')
     input_shape = input_images.shape.as_list()
     input_images = tf.image.random_brightness(input_images,
                                               max_delta=0.3)
