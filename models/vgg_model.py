@@ -43,10 +43,18 @@ class VGG(ModelBuilder):
     self.model_vars = set(model_vars).difference(set(all_vars))
     return net, endpoints
   
-  def restore_checkpoint(self, sess, checkpoint_path):
+  def restore_checkpoint(self, sess, latest_checkpoint):
     """Function to restore weights from checkpoint."""
-    if not checkpoint_path:
-      checkpoint_path = self.model_config.checkpoint_path
-    latest_checkpoint = tf.train.latest_checkpoint(checkpoint_path)
-    saver = tf.train.Saver(self.model_vars)
+    if not latest_checkpoint:
+      latest_checkpoint = self.model_config.checkpoint_path
+    # Get model vars
+    model_vars = [var.name[:-2] for var in list(self.model_vars)]
+    # Get checkpoint vars
+    ckpt_vars = list(tf.train.list_variables(latest_checkpoint))
+    ckpt_vars = [var for var, var_shape in ckpt_vars]
+    # Restore vars = checkpoint_vars.intersection(model_vars)
+    restore_vars = list(set(ckpt_vars).intersection(set(model_vars)))
+    restore_vars = [var for var in self.model_vars 
+                    if var.name[:-2] in restore_vars]
+    saver = tf.train.Saver(restore_vars)
     saver.restore(sess, latest_checkpoint)
