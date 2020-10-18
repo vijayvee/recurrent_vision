@@ -1,7 +1,7 @@
 #!/bin/bash
 export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba/src
 
-LEARNING_RATE=1e-3
+LEARNING_RATE=1e-4
 WEIGHT_DECAY=1e-4
 NUM_EPOCHS=100
 TRAIN_BATCH_SIZE=8

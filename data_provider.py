@@ -28,19 +28,24 @@ class BSDSDataProvider:
     files = tf.data.Dataset.list_files(glob_pattern, shuffle=is_training)
     # parallel fetching of tfrecords dataset
     dataset = files.apply(tf.data.experimental.parallel_interleave(
-                            self.fetch_dataset, cycle_length=threads, sloppy=True))
+                            self.fetch_dataset, cycle_length=threads, 
+                            sloppy=True))
     # shuffling dataset
-    dataset = dataset.shuffle(buffer_size=8 * self.batch_size, seed=None)
+    dataset = dataset.shuffle(buffer_size=8 * self.batch_size, 
+                              seed=None)
     dataset = dataset.repeat(count=None)
     # use decode function to retrieve images and labels
     dataset = dataset.apply(
-                    tf.data.experimental.map_and_batch(self.decode_feats,
-                                                        batch_size=self.batch_size,
-                                                        num_parallel_batches=threads,
-                                                        drop_remainder=True))
+                tf.data.experimental.map_and_batch(self.decode_feats,
+                                                   batch_size=self.batch_size,
+                                                   num_parallel_batches=threads,
+                                                   drop_remainder=True))
     self.dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    iterator = tf.make_one_shot_iterator(dataset)
+    self.images, self.labels, self.mask = iterator.get_next()
 
   def fetch_dataset(self, filename):
+    """Fetch tf.data.Dataset from tfrecord filename."""
     buffer_size = 8 * 1024 * 1024  # 8 MiB per file
     dataset = tf.data.TFRecordDataset(filename, buffer_size=buffer_size)
     return dataset
@@ -60,9 +65,11 @@ class BSDSDataProvider:
             [], tf.string)
         }
     sample = tf.parse_single_example(tfrecord, feat_dict)
+    # Decode image
     img = tf.decode_raw(sample["%s/image" %(split)] ,tf.float64)
     img = tf.cast(img, tf.float32)
-    label = tf.decode_raw(sample["%s/label" %(split)] ,tf.float32)
     img = tf.reshape(img, [321, 481, 3])
+    # Decode label
+    label = tf.decode_raw(sample["%s/label" %(split)] ,tf.float32)
     label = tf.reshape(label, [321, 481, 1])
     return {"image": img}, {"label": label}

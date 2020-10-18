@@ -33,6 +33,8 @@ flags.DEFINE_string("optimizer", "",
                     "Optimizer algorithm (Adam, SGD, etc.)")
 flags.DEFINE_boolean("use_tpu", True,
                      "Whether to use TPU for training")
+flags.DEFINE_boolean("evaluate", False,
+                     "Whether to evaluate during training")
 flags.DEFINE_string("tpu_name", "",
                     "Name of TPU to use")
 flags.DEFINE_string("tpu_zone", "europe-west4-a",
@@ -41,7 +43,6 @@ flags.DEFINE_string("data_dir", "",
                     "Data directory with BSDS500 tfrecords")
 
 # TODO(vveeraba): add learning rate decay
-# TODO(vveeraba): add checkpoint restoring
 # TODO(vveeraba): add dropout
 # TODO(vveeraba): check efficientnet main.py and implement features
 
@@ -119,17 +120,17 @@ def model_fn(features, labels, mode, params):
 
 
 def get_input_fn_train(params):
-  """Input function for data serving during model training."""
+  """Input function for model training."""
   num_examples = 300
   def input_fn(params):
     dataset = BSDSDataProvider(params["train_batch_size"],
-                             is_training=True,
-                             data_dir=params["data_dir"])
+                               is_training=True,
+                               data_dir=params["data_dir"])
     return dataset.dataset
   return num_examples, input_fn
 
 def get_input_fn_validation(params):
-  """Input function for data serving during model evaluation."""
+  """Input function for model evaluation."""
   num_examples = 100
   def input_fn(params):
     dataset = BSDSDataProvider(params["eval_batch_size"],
@@ -206,13 +207,14 @@ def main(argv):
 
     tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",
                     next_checkpoint, int(time.time() - start_timestamp))
-
-    tf.logging.info("Starting to evaluate.")
-    eval_results = classifier.evaluate(
-                        input_fn=input_fn_val,
-                        steps=num_eval_steps)
-    tf.logging.info("Eval results at step %d: %s",
-                    next_checkpoint, eval_results)
+    if FLAGS.evaluate:
+      tf.logging.info("Avoid evaluation on TPU")
+      tf.logging.info("Starting to evaluate.")
+      eval_results = classifier.evaluate(
+                          input_fn=input_fn_val,
+                          steps=num_eval_steps)
+      tf.logging.info("Eval results at step %d: %s",
+                      next_checkpoint, eval_results)
 
   elapsed_time = int(time.time() - start_timestamp)
   tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",

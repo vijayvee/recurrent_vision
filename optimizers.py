@@ -1,6 +1,6 @@
 """Create optimization functions."""
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 tf.disable_v2_behavior()
 
 def get_optimizer(learning_rate, opt, use_tpu=True):
