@@ -57,7 +57,7 @@ def model_fn(features, labels, mode, params):
     params: (Dict) of model training parameters.
   """
   eval_metrics, train_op, loss = None, None, None
-  scaffold_fn = None
+  scaffold_fn, host_call = None, None
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_16_hed_config()
   vgg = VGG(cfg)
@@ -105,6 +105,17 @@ def model_fn(features, labels, mode, params):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     train_op = optimizer.minimize(loss, global_step)
     train_op = tf.group([train_op, update_ops])
+    gs_t = tf.reshape(global_step, [1])
+    loss_t = tf.reshape(loss, [1])
+    loss_side_t = tf.reshape(loss_side, [1])
+    loss_fuse_t = tf.reshape(loss_fuse, [1])
+    img_t = vgg.augmented_images
+    labels_t = features["label"]
+    preds_t = tf.nn.sigmoid(predictions)
+
+    host_call_args = [params, gs_t, loss_t, loss_side_t, 
+                      loss_fuse_t, img_t, labels_t, preds_t]
+    host_call = (host_call_fn, host_call_args)
 
   if mode == tf.estimator.ModeKeys.EVAL:
     # Define evaluation metrics:
@@ -120,6 +131,7 @@ def model_fn(features, labels, mode, params):
   return tf.estimator.tpu.TPUEstimatorSpec(train_op=train_op,
                                            mode=mode, loss=loss, 
                                            eval_metrics=eval_metrics,
+                                           host_call=host_call,
                                            # TODO(vveeraba): skipping scaffold_Fn
                                            # scaffold_fn=scaffold_fn,
                                            )
@@ -160,6 +172,39 @@ def get_scaffold_fn():
     tf.train.init_from_checkpoint(latest_checkpoint, restore_vars)
     return tf.train.Scaffold()
   return scaffold_fn
+
+
+def host_call_fn(params, gs, loss, loss_side, loss_fuse, 
+                 img, lbls, preds):
+  """Training host call. Creates scalar summaries for training metrics.
+  This function is executed on the CPU and should not directly reference
+  any Tensors in the rest of the `model_fn`. To pass Tensors from the
+  model to the `metric_fn`, provide as part of the `host_call`. See
+  https://www.tensorflow.org/api_docs/python/tf/estimator/tpu/TPUEstimatorSpec
+  for more information.
+  Arguments should match the list of `Tensor` objects passed as the second
+  element in the tuple passed to `host_call`.
+  Args:
+    gs: `Tensor with shape `[batch]` for the global_step
+    loss: `Tensor` with shape `[batch]` for the training loss.
+    loss_side: `Tensor` with shape `[batch]` for the training side loss.
+    loss_fuse: `Tensor` with shape `[batch]` for the training fused loss.
+    img: `Tensor` of input images.
+  Returns:
+    List of summary ops to run on the CPU host.
+  """
+  gs = gs[0]
+  with tf.compat.v2.summary.create_file_writer(params['model_dir'],
+                                               max_queue=32).as_default():
+    with tf.compat.v2.summary.record_if(True):
+      tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
+      tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
+      tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
+      tf.compat.v2.summary.image('training/images',img,step=gs)
+      tf.compat.v2.summary.image('training/labels',lbls,step=gs)
+      tf.compat.v2.summary.image('training/predictions',preds,step=gs)
+      tf.compat.v2.summary.text('training/training_params',str(params),step=0)
+    return tf.summary.all_v2_summary_ops()
 
 def main(argv):
   del argv  # unused here
