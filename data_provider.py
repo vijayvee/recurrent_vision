@@ -3,6 +3,7 @@ import functools
 import multiprocessing
 import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
+import tensorflow_addons as tfa  # pylint: disable=import-error
 import tensorflow_datasets as tfds  # pylint: disable=import-error
 tf.disable_v2_behavior()
 
@@ -23,6 +24,27 @@ _STDDEV_RGB_DICT = {
     "imagenet": [0.229, 0.224, 0.225],
 }
 
+def augment_images_bsds(image, label):
+  """Augment minibatch of images and 
+  labels for boundary prediction."""
+  image_label_stack = tf.concat([image, label], 
+                                 axis=-1)
+  rotate_theta = tf.random.uniform((), 0, np.pi/2)
+  image_label_stack = tf.image.random_flip_left_right(image_label_stack)
+  image_label_stack = tf.image.random_flip_up_down(image_label_stack)
+  image_label_stack = tfa.image.rotate(image_label_stack, rotate_theta)
+  image_label_unstack = tf.unstack(image_label_stack, axis=-1)
+  images_aug = tf.stack(image_label_unstack[:-1], axis=-1)
+  labels_aug = tf.expand_dims(image_label_unstack[-1], axis=-1)
+  return images_aug, labels_aug
+
+def convert_to_rgb(image):
+  """Convert images to RGB from BGR."""
+  channels = tf.unstack(image, axis=-1)
+  rgb_image = tf.stack([channels[2],
+                        channels[1],
+                        channels[0]], axis=-1)
+  return rgb_image
 
 # =================  Preprocessing Utility Functions. =====================
 def _distorted_bounding_box_crop(image,
@@ -304,7 +326,10 @@ class BSDSDataProvider:
     img = tf.decode_raw(sample["%s/image" %(split)] ,tf.float64)
     img = tf.cast(img, tf.float32)
     img = tf.reshape(img, [321, 481, 3])
+    img = convert_to_rgb(img)
     # Decode label
     label = tf.decode_raw(sample["%s/label" %(split)] ,tf.float32)
     label = tf.reshape(label, [321, 481, 1])
+    if training:
+      img, label = augment_images_bsds(img, label)
     return {"image": img}, {"label": label}
