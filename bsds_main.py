@@ -120,7 +120,8 @@ def model_fn(features, labels, mode, params):
   return tf.estimator.tpu.TPUEstimatorSpec(train_op=train_op,
                                            mode=mode, loss=loss, 
                                            eval_metrics=eval_metrics,
-                                           scaffold_fn=scaffold_fn,
+                                           # TODO(vveeraba): skipping scaffold_Fn
+                                           # scaffold_fn=scaffold_fn,
                                            )
 
 
@@ -157,6 +158,7 @@ def get_scaffold_fn():
     restore_vars = {var.name[:-2]: var for var in tf.global_variables()
                     if var.name[:-2] in restore_vars}
     tf.train.init_from_checkpoint(latest_checkpoint, restore_vars)
+    return tf.train.Scaffold()
   return scaffold_fn
 
 def main(argv):
@@ -188,6 +190,10 @@ def main(argv):
 
   evaluate_every = int(args["evaluate_every"] * num_train_steps_per_epoch // args["train_batch_size"])
   tf.logging.info("Evaluating every %s steps"%(evaluate_every))
+  warm_start_settings = tf.estimator.WarmStartSettings(            
+                                        ckpt_to_initialize_from=args['checkpoint'],
+					vars_to_warm_start="^(?!.*side_output)",
+					)
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
                 args["tpu_name"] if args["use_tpu"] else "",

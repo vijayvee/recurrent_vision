@@ -1,8 +1,10 @@
 """Utility functions to build model layers"""
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from recurrent_vision.utils.horizontal_cells.v1net_cell import V1Net_BN_cell
+tf.disable_v2_behavior()
+
 
 def build_conv_bn_relu(inputs,
                        filters, 
