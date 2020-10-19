@@ -28,9 +28,10 @@ class VGG(ModelBuilder):
 
   def build_model(self, images, is_training=True):
     """Build model with input images."""
-    net = self.preprocess(images)
+    net = tf.identity(images)
     if is_training:
       net = self.augment_images(net)
+    net = self.preprocess(net)
     model_config = self.model_config
     if self.model_name.startswith("vgg_16_hed"):
       model_fn = vgg.vgg_16_hed
