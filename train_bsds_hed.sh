@@ -1,14 +1,14 @@
 #!/bin/bash
 export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba/src
 
-LEARNING_RATE=1e-4
+LEARNING_RATE=1e-5
 WEIGHT_DECAY=1e-4
 NUM_EPOCHS=100
 TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
 EVALUATE_EVERY=2
-EXPERIMENT_NAME="bsds_vgg_hed_test"
-CHECKPOINT="models/pretrained_nets/checkpoints/vgg_16/vgg_16.ckpt"
+EXPERIMENT_NAME="bsds_vgg_hed_training_ft"
+CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="adam"
 USE_TPU=True
 TPU_NAME=$1
