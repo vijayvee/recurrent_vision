@@ -181,7 +181,6 @@ def preprocess_imagenet(data,
   mask = 1.
   image = data["image"]
 
-  # Reserve label 0 for background
   label = data["label"]
   image = tf.image.convert_image_dtype(image, dtype=tf.float32)
 
