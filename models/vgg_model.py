@@ -22,8 +22,8 @@ class VGG(ModelBuilder):
     images = tf.image.resize(images,
                              self.image_size,
                              )
-    images = images * 255.
-    images = images - self.model_config.mean_rgb
+    #images = images * 255.
+    #images = images - self.model_config.mean_rgb
     return images
 
   def build_model(self, images, is_training=True):
