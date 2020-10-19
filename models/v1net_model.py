@@ -1,7 +1,8 @@
 """Builder for V1Net CNNs."""
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from recurrent_vision.models.model_builder import ModelBuilder
 from recurrent_vision.utils.model_utils import build_avgpool, build_dense, build_v1net
+tf.disable_v2_behavior()
 
 
 class V1NetCNN(ModelBuilder):

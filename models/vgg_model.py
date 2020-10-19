@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from recurrent_vision.models.model_builder import ModelBuilder
 from recurrent_vision.models.pretrained_nets import vgg
-
+tf.disable_v2_behavior()
 
 class VGG(ModelBuilder):
   """Class for building VGG CNNs."""

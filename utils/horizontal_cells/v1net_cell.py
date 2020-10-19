@@ -1,4 +1,4 @@
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from tensorflow.python.framework import tensor_shape  # pylint: disable=import-error
 from tensorflow.python.ops import array_ops  # pylint: disable=import-error
 from tensorflow.python.ops import init_ops  # pylint: disable=import-error

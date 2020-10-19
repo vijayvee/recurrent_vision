@@ -2,9 +2,11 @@
 from abc import ABC, abstractclassmethod
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from recurrent_vision.utils.model_utils import build_conv_bn_relu, build_pool2d
+tf.disable_v2_behavior()
+
 
 class ModelBuilder:
   """Abstract class for building models."""
@@ -21,7 +23,7 @@ class ModelBuilder:
     # TODO(vveeraba): Add unit test for bounds of output images
     # TODO(vveeraba): Add fixed image rotations
     # TODO(vveeraba): Check parameters of the following transformations
-    tf.logging.INFO('Augmenting images..')
+    tf.logging.info('Augmenting images..')
     input_shape = input_images.shape.as_list()
     input_images = tf.image.random_brightness(input_images,
                                               max_delta=0.3)
