@@ -82,19 +82,17 @@ def model_fn(features, labels, mode, params):
     }
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
-  pos_weight = 0.9
+  pos_weight = 9.
   loss_fn = tf.nn.weighted_cross_entropy_with_logits
-  loss_fuse = loss_fn(logits=predictions,
-                      labels=labels["label"],
-                      pos_weight=pos_weight,
-                      )
-  loss_side = loss_fn(logits=side_predictions,
-                      labels=side_labels,
-                      pos_weight=pos_weight
-                      )
+  loss_fuse = .1*tf.reduce_mean(loss_fn(logits=predictions,
+                                     labels=labels["label"],
+                                     pos_weight=pos_weight,)
+                                     )
+  loss_side = .1*tf.reduce_mean(loss_fn(logits=side_predictions,
+                                     labels=side_labels,
+                                     pos_weight=pos_weight),
+                                     )
   loss = loss_side + loss_fuse
-  # TODO(vveeraba): check below averaging
-  loss = tf.reduce_mean(loss)
   
   if training:
     scaffold_fn = get_scaffold_fn()
@@ -110,10 +108,42 @@ def model_fn(features, labels, mode, params):
     loss_side_t = tf.reshape(loss_side, [1])
     loss_fuse_t = tf.reshape(loss_fuse, [1])
     img_t = vgg.augmented_images
-    labels_t = features["label"]
+    labels_t = labels["label"]
     preds_t = tf.nn.sigmoid(predictions)
 
-    host_call_args = [params, gs_t, loss_t, loss_side_t, 
+    def host_call_fn(gs, loss, loss_side, loss_fuse, 
+	             img, lbls, preds):
+      """Training host call. Creates scalar summaries for training metrics.
+      This function is executed on the CPU and should not directly reference
+      any Tensors in the rest of the `model_fn`. To pass Tensors from the
+      model to the `metric_fn`, provide as part of the `host_call`. See
+      https://www.tensorflow.org/api_docs/python/tf/estimator/tpu/TPUEstimatorSpec
+      for more information.
+      Arguments should match the list of `Tensor` objects passed as the second
+      element in the tuple passed to `host_call`.
+      Args:
+	gs: `Tensor with shape `[batch]` for the global_step
+	loss: `Tensor` with shape `[batch]` for the training loss.
+	loss_side: `Tensor` with shape `[batch]` for the training side loss.
+	loss_fuse: `Tensor` with shape `[batch]` for the training fused loss.
+	img: `Tensor` of input images.
+      Returns:
+	List of summary ops to run on the CPU host.
+      """
+      gs = gs[0]
+      with tf.compat.v2.summary.create_file_writer(params['model_dir'],
+						   max_queue=32).as_default():
+        with tf.compat.v2.summary.record_if(True):
+          tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
+          tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
+          tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
+          tf.compat.v2.summary.image('training/images',img,step=gs)
+          tf.compat.v2.summary.image('training/labels',lbls,step=gs)
+          tf.compat.v2.summary.image('training/predictions',preds,step=gs)
+          tf.compat.v2.summary.text('training/training_params',str(params),step=0)
+          return tf.summary.all_v2_summary_ops()
+
+    host_call_args = [gs_t, loss_t, loss_side_t, 
                       loss_fuse_t, img_t, labels_t, preds_t]
     host_call = (host_call_fn, host_call_args)
 
@@ -174,38 +204,6 @@ def get_scaffold_fn():
   return scaffold_fn
 
 
-def host_call_fn(params, gs, loss, loss_side, loss_fuse, 
-                 img, lbls, preds):
-  """Training host call. Creates scalar summaries for training metrics.
-  This function is executed on the CPU and should not directly reference
-  any Tensors in the rest of the `model_fn`. To pass Tensors from the
-  model to the `metric_fn`, provide as part of the `host_call`. See
-  https://www.tensorflow.org/api_docs/python/tf/estimator/tpu/TPUEstimatorSpec
-  for more information.
-  Arguments should match the list of `Tensor` objects passed as the second
-  element in the tuple passed to `host_call`.
-  Args:
-    gs: `Tensor with shape `[batch]` for the global_step
-    loss: `Tensor` with shape `[batch]` for the training loss.
-    loss_side: `Tensor` with shape `[batch]` for the training side loss.
-    loss_fuse: `Tensor` with shape `[batch]` for the training fused loss.
-    img: `Tensor` of input images.
-  Returns:
-    List of summary ops to run on the CPU host.
-  """
-  gs = gs[0]
-  with tf.compat.v2.summary.create_file_writer(params['model_dir'],
-                                               max_queue=32).as_default():
-    with tf.compat.v2.summary.record_if(True):
-      tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
-      tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
-      tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
-      tf.compat.v2.summary.image('training/images',img,step=gs)
-      tf.compat.v2.summary.image('training/labels',lbls,step=gs)
-      tf.compat.v2.summary.image('training/predictions',preds,step=gs)
-      tf.compat.v2.summary.text('training/training_params',str(params),step=0)
-    return tf.summary.all_v2_summary_ops()
-
 def main(argv):
   del argv  # unused here
   gcs_root = "gs://v1net-tpu-bucket/"
@@ -237,7 +235,7 @@ def main(argv):
   tf.logging.info("Evaluating every %s steps"%(evaluate_every))
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start="^(?!.*side_output)",
+                                        vars_to_warm_start="^(?!.*side_output|.*Momentum)",
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
