@@ -31,6 +31,7 @@ class VGG(ModelBuilder):
     net = tf.identity(images)
     if is_training:
       net = self.augment_images(net)
+      self.augmented_images = tf.identity(net)
     net = self.preprocess(net)
     model_config = self.model_config
     if self.model_name.startswith("vgg_16_hed"):
