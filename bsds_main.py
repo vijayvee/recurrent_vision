@@ -190,10 +190,10 @@ def main(argv):
 
   evaluate_every = int(args["evaluate_every"] * num_train_steps_per_epoch // args["train_batch_size"])
   tf.logging.info("Evaluating every %s steps"%(evaluate_every))
-  warm_start_settings = tf.estimator.WarmStartSettings(            
+  warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-					vars_to_warm_start="^(?!.*side_output)",
-					)
+                                        vars_to_warm_start="^(?!.*side_output)",
+                                        )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
                 args["tpu_name"] if args["use_tpu"] else "",

@@ -5,6 +5,7 @@ from recurrent_vision.models.model_builder import ModelBuilder
 from recurrent_vision.models.pretrained_nets import vgg
 tf.disable_v2_behavior()
 
+
 class VGG(ModelBuilder):
   """Class for building VGG CNNs."""
   def __init__(self, model_config):

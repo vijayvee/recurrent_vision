@@ -6,6 +6,7 @@ _G_MEAN = 116.78
 _B_MEAN = 103.94
 mean_rgb_vgg = np.array([_R_MEAN, _G_MEAN, _B_MEAN])
 
+
 class ConfigDict(object):
   pass
 
