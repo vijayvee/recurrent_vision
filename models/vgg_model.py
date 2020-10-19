@@ -13,10 +13,16 @@ class VGG(ModelBuilder):
     self.model_name = model_config.model_name
     
   def preprocess(self, images):
-    """Model-specific preprocessing of input images."""
-    images = tf.image.resize(images, 
+    """Model-specific preprocessing of input images.
+    Args:
+      images: (Tensor) of input images in [0, 1]
+    Returns:
+      images transformed specific to VGG"""
+    images = tf.image.resize(images,
                              self.image_size,
                              )
+    images = images * 255.
+    images = images - self.model_config.mean_rgb
     return images
 
   def build_model(self, images, is_training=True):
