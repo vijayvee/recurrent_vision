@@ -354,6 +354,7 @@ vgg_19.default_image_size = 224
 def vgg_16_hed(inputs,
               num_classes=1,
               is_training=True,
+              add_v1net_early=False,
               add_v1net=False,
               reuse=None,
               reduce_conv=True,
@@ -384,14 +385,14 @@ def vgg_16_hed(inputs,
                         # weights_regularizer=slim.l2_regularizer(0.0002),
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
-      side_outputs.append(net)
-      net = slim.max_pool2d(net, [2, 2], scope='pool1')
-      if add_v1net:
+      if add_v1net_early:
         with tf.variable_scope("v1net-conv1"):
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
+      side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool1')
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
       side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
