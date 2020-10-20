@@ -41,7 +41,7 @@ from __future__ import absolute_import, division, print_function
 
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import tf_slim as slim  # pylint: disable=import-error
-from recurrent_vision.utils.model_utils import build_v1net
+from recurrent_vision.utils.model_utils import build_v1net, fuse_predictions
 
 
 def vgg_arg_scope(weight_decay=0.0005):
@@ -381,6 +381,7 @@ def vgg_16_hed(inputs,
     # TODO(vveerabadran): Where to add V1Net?
     # TODO(vveerabadran): Should side outputs be output of V1Net?
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
+                        weights_regularizer=slim.l2_regularizer(0.0002),
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       side_outputs.append(net)
@@ -432,19 +433,23 @@ def vgg_16_hed(inputs,
       side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
       if reduce_conv:
         with tf.variable_scope("side_output_fusion"):
-          side_outputs_fullres = tf.transpose(side_outputs_fullres, 
+          side_outputs_ = tf.transpose(side_outputs_fullres, 
                                             (1,2,3,4,0))
-          side_outputs_fullres = tf.squeeze(side_outputs_fullres, axis=3)
-          fused_predictions = slim.conv2d(side_outputs_fullres, 1, [1,1],
-                                        activation_fn=None,
-                                        normalizer_fn=None,
-                                        )
+          side_outputs_ = tf.squeeze(side_outputs_, axis=3)
+          fused_predictions = fuse_predictions(side_outputs_)
       else:
         fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
       end_points['fused_predictions'] = fused_predictions
+      test_predictions = tf.reduce_mean(
+                              tf.stack([side_outputs_fullres,
+                                        tf.expand_dims(fused_predictions, 0),
+                                        ],
+                                   axis=0),
+                                   axis=0)
       side_outputs_fullres = tf.reshape(side_outputs_fullres,
                                         (-1, h, w, 1))
       end_points['side_outputs_fullres'] = side_outputs_fullres
+      end_points['test_outputs'] = test_predictions
       return fused_predictions, end_points
 
 

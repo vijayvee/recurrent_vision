@@ -57,7 +57,7 @@ def model_fn(features, labels, mode, params):
     params: (Dict) of model training parameters.
   """
   eval_metrics, train_op, loss = None, None, None
-  scaffold_fn, host_call = None, None
+  host_call = None
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_16_hed_config()
   vgg = VGG(cfg)
@@ -95,7 +95,6 @@ def model_fn(features, labels, mode, params):
   loss = loss_side + loss_fuse
   
   if training:
-    scaffold_fn = get_scaffold_fn()
     global_step = tf.train.get_global_step()
     optimizer = get_optimizer(FLAGS.learning_rate,
                               FLAGS.optimizer,

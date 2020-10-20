@@ -1,10 +1,22 @@
 """Utility functions to build model layers"""
 
 import numpy as np
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from recurrent_vision.utils.horizontal_cells.v1net_cell import V1Net_BN_cell
 tf.disable_v2_behavior()
 
+def fuse_predictions(inputs, is_training=True):
+  """Build 1x1 convolution for side output fusion (HED)."""
+  initializer = tf.keras.initializers.Constant(value=1./5)
+  inputs = tf.layers.conv2d(inputs=inputs,
+                            filters=1,
+                            kernel_size=1,
+                            strides=(1,1),
+                            padding='same',
+                            use_bias=False,
+                            kernel_initializer=initializer,
+                            )
+  return inputs
 
 def build_conv_bn_relu(inputs,
                        filters, 
@@ -12,6 +24,8 @@ def build_conv_bn_relu(inputs,
                        strides=(1, 1), 
                        padding='same',
                        is_training=True,
+                       normalization=True,
+                       activation=True,
                        ):
   """Function to build a Conv+Batchnorm+Relu block.
   Args:
@@ -31,13 +45,15 @@ def build_conv_bn_relu(inputs,
                             strides=strides,
                             padding=padding,
                             )
-  inputs = tf.layers.batch_normalization(inputs=inputs,
+  if normalization:
+    inputs = tf.layers.batch_normalization(inputs=inputs,
                                          axis=3,
                                          center=True,
                                          scale=True,
                                          training=is_training,
                                          gamma_initializer=tf.ones_initializer())
-  inputs = tf.nn.relu(inputs)
+  if activation:
+    inputs = tf.nn.relu(inputs)
   return inputs
 
 def build_pool2d(inputs,
