@@ -1,5 +1,6 @@
 """Builder for VGG."""
 import numpy as np
+import tf_slim as slim  # pylint: disable=import-error
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from recurrent_vision.models.model_builder import ModelBuilder
 from recurrent_vision.models.pretrained_nets import vgg
@@ -38,14 +39,15 @@ class VGG(ModelBuilder):
     elif self.model_name.startswith("vgg_16"):
       model_fn = vgg.vgg_16
     all_vars = [var for var in tf.global_variables()]
-    net, endpoints = model_fn(inputs=net,
-                      num_classes=model_config.num_classes,
-                      is_training=is_training,
-                      add_v1net=model_config.add_v1net,
-                      add_v1net_early=model_config.add_v1net_early,
-                  #  v1_timesteps=model_config.v1_timesteps,
-                  #  v1_kernel_size=model_config.v1_kernel_size,
-                   )
+    with slim.arg_scope(vgg.vgg_arg_scope()):
+      net, endpoints = model_fn(inputs=net,
+                        num_classes=model_config.num_classes,
+                        is_training=is_training,
+                        add_v1net=model_config.add_v1net,
+                        add_v1net_early=model_config.add_v1net_early,
+                    #  v1_timesteps=model_config.v1_timesteps,
+                    #  v1_kernel_size=model_config.v1_kernel_size,
+                    )
     model_vars = [var for var in tf.global_variables()]
     self.model_vars = set(model_vars).difference(set(all_vars))
     return net, endpoints
