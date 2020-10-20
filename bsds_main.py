@@ -9,7 +9,7 @@ import numpy as np
 from recurrent_vision.data_provider import BSDSDataProvider
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
 from recurrent_vision.models.vgg_model import VGG
-from recurrent_vision.optimizers import get_optimizer
+from recurrent_vision.optimizers import get_optimizer, build_learning_rate
 
 tf.disable_v2_behavior()
 
@@ -82,35 +82,44 @@ def model_fn(features, labels, mode, params):
     }
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
-  pos_weight = 9.
+  pos_weight = 1.1
   loss_fn = tf.nn.weighted_cross_entropy_with_logits
   xent = tf.nn.sigmoid_cross_entropy_with_logits
   loss_fuse = tf.reduce_mean(xent(logits=predictions,
                                   labels=labels["label"],
                                   ))
-  loss_side = 0.1 * tf.reduce_mean(loss_fn(logits=side_predictions,
+  loss_side = tf.reduce_mean(loss_fn(logits=side_predictions,
                                      labels=side_labels,
                                      pos_weight=pos_weight),
                                      )
-  loss = loss_side + loss_fuse
+  loss = loss_side + loss_fuse + FLAGS.weight_decay * tf.add_n(
+                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
+                           if 'batch_normalization' not in v.name])
   
   if training:
     global_step = tf.train.get_global_step()
-    optimizer = get_optimizer(FLAGS.learning_rate,
+    steps_per_epoch = params["num_train_steps_per_epoch"]
+    learning_rate = build_learning_rate(FLAGS.learning_rate,
+                                        global_step,
+                                        steps_per_epoch,
+                                        decay_factor=0.1,
+                                        decay_epochs=50)
+    optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
                               FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     train_op = optimizer.minimize(loss, global_step)
     train_op = tf.group([train_op, update_ops])
     gs_t = tf.reshape(global_step, [1])
+    lr_t = tf.reshape(learning_rate, [1])
     loss_t = tf.reshape(loss, [1])
     loss_side_t = tf.reshape(loss_side, [1])
     loss_fuse_t = tf.reshape(loss_fuse, [1])
     img_t = features["image"]
     labels_t = labels["label"]
-    preds_t = tf.nn.sigmoid(predictions)
+    preds_t = tf.nn.sigmoid(endpoints["test_outputs"])
 
-    def host_call_fn(gs, loss, loss_side, loss_fuse, 
+    def host_call_fn(gs, lr, loss, loss_side, loss_fuse, 
 	             img, lbls, preds):
       """Training host call. Creates scalar summaries for training metrics.
       This function is executed on the CPU and should not directly reference
@@ -136,13 +145,14 @@ def model_fn(features, labels, mode, params):
           tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
           tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
           tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
+          tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
           tf.compat.v2.summary.image('training/images',img,step=gs)
           tf.compat.v2.summary.image('training/labels',lbls,step=gs)
-          tf.compat.v2.summary.image('training/predictions',preds,step=gs)
+          tf.compat.v2.summary.image('training/predictions',1-preds,step=gs)
           tf.compat.v2.summary.text('training/training_params',str(params),step=0)
           return tf.summary.all_v2_summary_ops()
 
-    host_call_args = [gs_t, loss_t, loss_side_t, 
+    host_call_args = [gs_t, lr_t, loss_t, loss_side_t, 
                       loss_fuse_t, img_t, labels_t, preds_t]
     host_call = (host_call_fn, host_call_args)
 
@@ -225,6 +235,7 @@ def main(argv):
   args["num_train_steps"] = args["num_train_examples"] // args["train_batch_size"]
   num_train_steps = args["num_train_steps"]
   num_train_steps_per_epoch = num_train_steps // args["num_epochs"]
+  args["num_train_steps_per_epoch"] = num_train_steps_per_epoch
   
   args["num_eval_examples"] = num_eval_examples
   args["num_eval_steps"] = args["num_eval_examples"] // args["eval_batch_size"]
