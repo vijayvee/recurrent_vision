@@ -10,7 +10,7 @@ class ConfigDict(object):
   pass
 
 
-def vgg_16_hed_config(vgg_depth=16):
+def vgg_16_hed_config(vgg_depth=16, add_v1net_early=False):
   """Return configuration to build VGG."""
   config = ConfigDict()
   config.image_size = (321, 481)
@@ -24,4 +24,5 @@ def vgg_16_hed_config(vgg_depth=16):
                                  )
   config.num_classes = 1
   config.add_v1net = False
+  config.add_v1net_early = add_v1net_early
   return config

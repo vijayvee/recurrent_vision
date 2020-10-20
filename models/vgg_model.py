@@ -42,6 +42,7 @@ class VGG(ModelBuilder):
                       num_classes=model_config.num_classes,
                       is_training=is_training,
                       add_v1net=model_config.add_v1net,
+                      add_v1net_early=model_config.add_v1net_early,
                   #  v1_timesteps=model_config.v1_timesteps,
                   #  v1_kernel_size=model_config.v1_kernel_size,
                    )
