@@ -381,7 +381,7 @@ def vgg_16_hed(inputs,
     # TODO(vveerabadran): Where to add V1Net?
     # TODO(vveerabadran): Should side outputs be output of V1Net?
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
-                        weights_regularizer=slim.l2_regularizer(0.0002),
+                        # weights_regularizer=slim.l2_regularizer(0.0002),
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       side_outputs.append(net)
@@ -441,7 +441,7 @@ def vgg_16_hed(inputs,
         fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
       end_points['fused_predictions'] = fused_predictions
       test_predictions = tf.reduce_mean(
-                              tf.stack([side_outputs_fullres,
+                              tf.concat([side_outputs_fullres,
                                         tf.expand_dims(fused_predictions, 0),
                                         ],
                                    axis=0),
