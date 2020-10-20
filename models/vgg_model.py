@@ -19,19 +19,16 @@ class VGG(ModelBuilder):
       images: (Tensor) of input images in [0, 1]
     Returns:
       images transformed specific to VGG"""
-    images = tf.image.resize(images,
-                             self.image_size,
-                             )
-    #images = images * 255.
-    #images = images - self.model_config.mean_rgb
+    # images = tf.image.resize(images,
+    #                         self.image_size,
+    #                         )
+    images = images * 255.
+    images = images - self.model_config.mean_rgb
     return images
 
   def build_model(self, images, is_training=True):
     """Build model with input images."""
     net = tf.identity(images)
-    if is_training:
-      net = self.augment_images(net)
-      self.augmented_images = tf.identity(net)
     net = self.preprocess(net)
     model_config = self.model_config
     if self.model_name.startswith("vgg_16_hed"):

@@ -356,6 +356,7 @@ def vgg_16_hed(inputs,
               is_training=True,
               add_v1net=False,
               reuse=None,
+              reduce_conv=True,
               scope='vgg_16',
               ):
   """VGG-16 implementation of HED.
@@ -429,7 +430,17 @@ def vgg_16_hed(inputs,
       side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
                               for side_output in side_outputs]
       side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
-      fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
+      if reduce_conv:
+        with tf.variable_scope("side_output_fusion"):
+          side_outputs_fullres = tf.transpose(side_outputs_fullres, 
+                                            (1,2,3,4,0))
+          side_outputs_fullres = tf.squeeze(side_outputs_fullres, axis=3)
+          fused_predictions = slim.conv2d(side_outputs_fullres, 1, [1,1],
+                                        activation_fn=None,
+                                        normalizer_fn=None,
+                                        )
+      else:
+        fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
       end_points['fused_predictions'] = fused_predictions
       side_outputs_fullres = tf.reshape(side_outputs_fullres,
                                         (-1, h, w, 1))

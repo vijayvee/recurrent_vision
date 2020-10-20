@@ -84,11 +84,11 @@ def model_fn(features, labels, mode, params):
 
   pos_weight = 9.
   loss_fn = tf.nn.weighted_cross_entropy_with_logits
-  loss_fuse = .1*tf.reduce_mean(loss_fn(logits=predictions,
-                                     labels=labels["label"],
-                                     pos_weight=pos_weight,)
-                                     )
-  loss_side = .1*tf.reduce_mean(loss_fn(logits=side_predictions,
+  xent = tf.nn.sigmoid_cross_entropy_with_logits
+  loss_fuse = tf.reduce_mean(xent(logits=predictions,
+                                  labels=labels["label"],
+                                  ))
+  loss_side = 0.1 * tf.reduce_mean(loss_fn(logits=side_predictions,
                                      labels=side_labels,
                                      pos_weight=pos_weight),
                                      )
@@ -107,7 +107,7 @@ def model_fn(features, labels, mode, params):
     loss_t = tf.reshape(loss, [1])
     loss_side_t = tf.reshape(loss_side, [1])
     loss_fuse_t = tf.reshape(loss_fuse, [1])
-    img_t = vgg.augmented_images
+    img_t = features["image"]
     labels_t = labels["label"]
     preds_t = tf.nn.sigmoid(predictions)
 
