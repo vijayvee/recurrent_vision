@@ -28,7 +28,7 @@ flags.DEFINE_string("checkpoint_dir", "",
 
 def load_image(image_path):
   """Load images from disk."""
-  img = np.array(Image.Open(image_path))
+  img = np.array(Image.open(image_path))
   if img.max() > 1.:
     img = img / 255.
   if img.shape[-1] == 1:

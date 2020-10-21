@@ -426,14 +426,14 @@ def vgg_16_hed(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
       side_outputs.append(net)
       end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+      side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
+                              for side_output in side_outputs]
       with tf.variable_scope("side_output_classifiers", reuse=reuse):
-        side_outputs = [slim.conv2d(side_output, 1, [1, 1],
+        side_outputs_fullres = [slim.conv2d(side_output, 1, [1, 1],
                                     activation_fn=None,
                                     normalizer_fn=None,
                                     )
-                        for side_output in side_outputs]
-      side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
-                              for side_output in side_outputs]
+                                for side_output in side_outputs_fullres]
       side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
       if reduce_conv:
         with tf.variable_scope("side_output_fusion"):
