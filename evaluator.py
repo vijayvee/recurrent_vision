@@ -2,11 +2,13 @@
 from absl import app
 from absl import flags
 
+import cv2  # pylint: disable=import-error
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow.compat.v1 as tf  #pylint: disable=import-error
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
+from tqdm import tqdm
 from PIL import Image
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
 from recurrent_vision.models.vgg_v1net_config import vgg_v1net_config
@@ -33,16 +35,26 @@ def load_image(image_path):
     img = img / 255.
   if img.shape[-1] == 1:
     img = np.repeat(img, 3, axis=-1)
+  if img.shape[0] == 481:
+    img = np.transpose(img, (1, 0, 2))
   img = np.expand_dims(img, axis=0)
   return img
 
 
 def save_image(image, prefix=None,
-               path=None, curr_idx=0):
+               path=None, curr_idx=None):
   """Write images to disk."""
-  filename = "%s_%04d.png" % (prefix, curr_idx)
+  if curr_idx:
+    filename = "%s_%04d.png" % (prefix.split('.')[0], 
+                                curr_idx)
+  else:
+    filename = "%s.png" % prefix.split('.')[0]
   filename = os.path.join(path, filename)
-  plt.imsave(filename, image)
+  if len(image.shape) == 4:
+    # Save only one image
+    image = image[0]
+  cv2.imwrite(filename, image*255)
+  # io.imsave(filename, image)
   return filename
 
 
@@ -71,21 +83,25 @@ class Evaluator:
   def evaluate(self):
     """Function to write boundary predictions."""
     in_dir = self.in_dir
+    out_dir = self.out_dir
     img_fns = tf.gfile.ListDirectory(in_dir)
+    img_fns = [i for i in img_fns if "jpg" in i]
+    if not tf.gfile.Exists(out_dir):
+      tf.gfile.MakeDirs(out_dir)
     with tf.Session() as sess:
       # Build and restore model
       images = tf.placeholder(tf.float32, [1, 321, 481, 3])
-      predictions = self.build_model(images)
+      predictions = tf.nn.sigmoid(self.build_model(images)) 
       latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
       self.model.restore_checkpoint(sess, latest_checkpoint)
 
       # Generate predictions
-      for ii, img_fn in enumerate(img_fns):
+      for img_fn in tqdm(img_fns):
         img = load_image(os.path.join(in_dir, img_fn))
         model_pred = sess.run(predictions, 
                               feed_dict={images: img})
-        save_image(model_pred, prefix="test_prediction", 
-                   path=self.out_dir, curr_idx=ii)
+        save_image(model_pred, prefix=img_fn, 
+                   path=out_dir)
   
 
 def main(argv):
