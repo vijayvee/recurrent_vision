@@ -266,24 +266,28 @@ class ImageNetDataProvider(object):
 
 
 class BSDSDataProvider:
-  """BSDS500 dataset."""
+  """BSDS500 dataset with augmentation pre-built in tfrecords.
+  Augmented dataset local copy: /mnt/cube/projects/bsds500/HED-BSDS
+  Augmented dataset source: http://vcl.ucsd.edu/hed/HED-BSDS.tar
+  """
   def __init__(self,
                batch_size,
                is_training,
                data_dir=None,
+               image_size=(400, 400),
                ):
-    # TODO(vveeraba): Add custom image size
     self.batch_size = batch_size
+    self.image_h, self.image_w = image_size
     threads = multiprocessing.cpu_count()
     # load tfrecord files
     if is_training:
       self.training = True
-      glob_pattern = "%s/train*.tfrecord" % data_dir
-      self.num_examples = 300
+      glob_pattern = "%s/train*" % data_dir
+      self.num_examples = 19200
     else:
       self.training=False
-      glob_pattern = "%s/val*.tfrecord" % data_dir
-      self.num_examples = 100
+      glob_pattern = "%s/validation*" % data_dir
+      self.num_examples = 9600
     files = tf.data.Dataset.list_files(glob_pattern, shuffle=is_training)
     # parallel fetching of tfrecords dataset
     dataset = files.apply(tf.data.experimental.parallel_interleave(
@@ -309,27 +313,35 @@ class BSDSDataProvider:
 
   def decode_feats(self, tfrecord):
     """Decode features written in tfrecords."""
-    training = self.training
-    split = "train"
-    if not training:
-        split = "val"
     feat_dict = {
-        "%s/shape" %(split): tf.FixedLenFeature(
-            [2], tf.int64),
-        "%s/image" %(split): tf.FixedLenFeature(
+        "height": tf.FixedLenFeature(
+            [1], tf.int64),
+        "width": tf.FixedLenFeature(
+            [1], tf.int64),
+        "image_raw": tf.FixedLenFeature(
             [], tf.string),
-        "%s/label" %(split): tf.FixedLenFeature(
+        "mask_raw": tf.FixedLenFeature(
+            [], tf.string),
+        "image_path": tf.FixedLenFeature(
             [], tf.string)
         }
     sample = tf.parse_single_example(tfrecord, feat_dict)
-    # Decode image
-    img = tf.decode_raw(sample["%s/image" %(split)] ,tf.float64)
-    img = tf.cast(img, tf.float32)
-    img = tf.reshape(img, [321, 481, 3])
-    img = convert_to_rgb(img)
-    # Decode label
-    label = tf.decode_raw(sample["%s/label" %(split)] ,tf.float32)
-    label = tf.reshape(label, [321, 481, 1])
-    if training:
-      img, label = augment_images_bsds(img, label)
-    return {"image": img}, {"label": label}
+    
+    # Deserialize data
+    img = tf.decode_raw(sample["image_raw"], tf.float32)
+    label = tf.decode_raw(sample["mask_raw"], tf.float32)
+    height = sample["height"][0]
+    width = sample["width"][0]
+    path = sample["image_path"]
+    img = tf.reshape(img, (height, width, 3))
+    label = tf.reshape(label, (height, width, 1))
+    img_mask = tf.concat([img, label], axis=-1)
+    img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
+                                                self.image_h, 
+                                                self.image_w)
+    img = tf.stack(
+              tf.unstack(img_mask, 
+                         axis=-1)[:-1],
+                         axis=-1)
+    label = tf.unstack(img_mask, axis=-1)[-1]
+    return {"image": img}, {"label": label}, {"path": path}
