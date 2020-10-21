@@ -16,7 +16,7 @@ tf.disable_v2_behavior()
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("model_name", "",
+flags.DEFINE_string("model_name", "vgg_16_hed",
                     "Name of model to build")
 flags.DEFINE_string("in_dir", "",
                     "Directory where test images stored")
