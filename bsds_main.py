@@ -180,7 +180,7 @@ def model_fn(features, labels, mode, params):
 
 def get_input_fn_train(params):
   """Input function for model training."""
-  num_examples = 300
+  num_examples = 19200
   def input_fn(params):
     dataset = BSDSDataProvider(params["train_batch_size"],
                                is_training=True,
@@ -190,7 +190,7 @@ def get_input_fn_train(params):
 
 def get_input_fn_validation(params):
   """Input function for model evaluation."""
-  num_examples = 100
+  num_examples = 9600
   def input_fn(params):
     dataset = BSDSDataProvider(params["eval_batch_size"],
                              is_training=False,
@@ -232,22 +232,22 @@ def main(argv):
   args["data_dir"] = os.path.join(gcs_root, args["data_dir"])
 
   num_train_examples, input_fn_train = get_input_fn_train(args)
-  num_eval_examples, input_fn_val = get_input_fn_validation(args)
+  # num_eval_examples, input_fn_val = get_input_fn_validation(args)
   args["num_train_examples"] = num_train_examples * args["num_epochs"]
   args["num_train_steps"] = args["num_train_examples"] // args["train_batch_size"]
   num_train_steps = args["num_train_steps"]
   num_train_steps_per_epoch = num_train_steps // args["num_epochs"]
   args["num_train_steps_per_epoch"] = num_train_steps_per_epoch
   
-  args["num_eval_examples"] = num_eval_examples
-  args["num_eval_steps"] = args["num_eval_examples"] // args["eval_batch_size"]
-  num_eval_steps = args["num_eval_steps"]
+  # args["num_eval_examples"] = num_eval_examples
+  # args["num_eval_steps"] = args["num_eval_examples"] // args["eval_batch_size"]
+  # num_eval_steps = args["num_eval_steps"]
 
   evaluate_every = int(args["evaluate_every"] * num_train_steps_per_epoch // args["train_batch_size"])
   tf.logging.info("Evaluating every %s steps"%(evaluate_every))
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start="^(?!.*side_output|.*Momentum)",
+                                        vars_to_warm_start="^(?!.*side_output|.*Momentum|.*v1net)",
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
@@ -288,15 +288,6 @@ def main(argv):
 
     tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",
                     next_checkpoint, int(time.time() - start_timestamp))
-    if FLAGS.evaluate:
-      tf.logging.info("Avoid evaluation on TPU")
-      tf.logging.info("Starting to evaluate.")
-      eval_results = classifier.evaluate(
-                          input_fn=input_fn_val,
-                          steps=num_eval_steps)
-      tf.logging.info("Eval results at step %d: %s",
-                      next_checkpoint, eval_results)
-
   elapsed_time = int(time.time() - start_timestamp)
   tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",
                           num_train_steps, elapsed_time)

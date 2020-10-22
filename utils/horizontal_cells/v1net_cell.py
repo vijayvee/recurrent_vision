@@ -26,6 +26,7 @@ class V1Net_BN_cell(rnn_cell_impl.RNNCell):
                forget_bias=1.0,
                initializers=None,
                training=None,
+               control=False,
                name="v1net_cell"):
     """Construct V1net cell.
     Args:
@@ -58,6 +59,7 @@ class V1Net_BN_cell(rnn_cell_impl.RNNCell):
     self.activation = activation
     print('Setting training to', training)
     self.training = training
+    self.control = control
     self.initializers = initializers
     self.timesteps = timesteps
     self._total_output_channels = output_channels
@@ -108,7 +110,7 @@ class V1Net_BN_cell(rnn_cell_impl.RNNCell):
 
     # computing horizontal push/pull
     input_hor, hidden_hor = X_c, (H_exc, H_inh, H_shunt)
-    new_input = _horizontal(input_hor, hidden_hor)
+    new_input = _horizontal(input_hor, hidden_hor, self.control)
     new_cell = math_ops.sigmoid(forget_gate) * cell
     new_cell += math_ops.sigmoid(input_gate) * tf.nn.tanh(new_input)
     new_cell = tf.keras.layers.LayerNormalization()(new_cell)  # (new_cell)
@@ -135,18 +137,25 @@ def _horizontal(input_hor, hidden_hor, control=False):
   """Function to perform hidden push pull
   integration in a linear-nonlinear fashion"""
   X_c, (H_exc, H_inh, H_shunt) = input_hor, hidden_hor
-  # alpha = vs.get_variable(
-  #                 "div_inh_control",
-  #                 [k_in], initializer=get_initializer(dtype),
-  #                 dtype=dtype)
-  # beta = vs.get_variable(
-  #                 "sub_inh_control",
-  #                 [k_in], initializer=get_initializer(dtype),
-  #                 dtype=dtype)
-  context_mod = tf.nn.sigmoid(H_shunt) * (X_c + tf.nn.sigmoid(H_exc) - tf.nn.sigmoid(H_inh))  # divisive inhibition
-  # context_mod = tf.nn.sigmoid(alpha) * tf.nn.relu(H_shunt) * (X_c + tf.nn.relu(H_exc) - tf.nn.sigmoid(beta) * tf.nn.relu(H_inh)) # controlled horizontal processing
-  # context_mod = tf.nn.sigmoid(H_shunt) * (X_c + tf.nn.relu(H_exc) - tf.nn.relu(H_inh))  # divisive inhibition
-  # context_mod = tf.nn.sigmoid(H_shunt) * (X_c + H_exc - H_inh)
+  k_in = X_c.shape.as_list()[-1]
+  dtype = X_c.dtype
+  if control:
+    # controlled horizontal processing
+    with tf.variable_scope("horizontal_processing",
+                           reuse=tf.AUTO_REUSE):
+      alpha = vs.get_variable(
+                   "div_inh_control",
+                   [k_in], initializer=get_initializer(dtype),
+                   dtype=dtype)
+      beta = vs.get_variable(
+                   "sub_inh_control",
+                   [k_in], initializer=get_initializer(dtype),
+                   dtype=dtype)
+      context_mod = tf.nn.sigmoid(alpha) * tf.nn.relu(H_shunt) * (X_c + tf.nn.relu(H_exc) - tf.nn.sigmoid(beta) * tf.nn.relu(H_inh)) 
+  else:
+    with tf.variable_scope("horizontal_processing",
+                           reuse=tf.AUTO_REUSE):
+      context_mod = tf.nn.sigmoid(H_shunt) * (X_c + tf.nn.sigmoid(H_exc) - tf.nn.sigmoid(H_inh))  # divisive inhibition
   return context_mod
 
 

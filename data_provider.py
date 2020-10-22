@@ -344,4 +344,5 @@ class BSDSDataProvider:
                          axis=-1)[:-1],
                          axis=-1)
     label = tf.unstack(img_mask, axis=-1)[-1]
-    return {"image": img}, {"label": label}, {"path": path}
+    label = tf.expand_dims(label, axis=2)
+    return {"image": img}, {"label": label}
