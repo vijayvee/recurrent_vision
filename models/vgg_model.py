@@ -20,17 +20,17 @@ class VGG(ModelBuilder):
       images: (Tensor) of input images in [0, 1]
     Returns:
       images transformed specific to VGG"""
-    # images = tf.image.resize(images,
-    #                         self.image_size,
-    #                         )
     images = images * 255.
     images = images - self.model_config.mean_rgb
     return images
 
-  def build_model(self, images, is_training=True):
+  def build_model(self, images, 
+                  is_training=True, 
+                  preprocess=False):
     """Build model with input images."""
     net = tf.identity(images)
-    # net = self.preprocess(net)
+    if preprocess:
+      net = self.preprocess(net)
     model_config = self.model_config
     if self.model_name.startswith("vgg_16_hed"):
       model_fn = vgg.vgg_16_hed
@@ -45,9 +45,7 @@ class VGG(ModelBuilder):
                         is_training=is_training,
                         add_v1net=model_config.add_v1net,
                         add_v1net_early=model_config.add_v1net_early,
-                    #  v1_timesteps=model_config.v1_timesteps,
-                    #  v1_kernel_size=model_config.v1_kernel_size,
-                    )
+                        )
     model_vars = [var for var in tf.global_variables()]
     self.model_vars = set(model_vars).difference(set(all_vars))
     return net, endpoints
