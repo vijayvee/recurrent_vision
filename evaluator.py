@@ -5,11 +5,13 @@ from absl import flags
 import cv2  # pylint: disable=import-error
 import os
 import matplotlib.pyplot as plt
-import numpy as np
+from skimage import io  # pylint: disable=import-error
+import numpy as np  
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 from tqdm import tqdm
 from PIL import Image
+from recurrent_vision.data_provider import ImageNetDataProvider
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
 from recurrent_vision.models.vgg_v1net_config import vgg_v1net_config
 from recurrent_vision.models.vgg_config import vgg_config
@@ -50,11 +52,13 @@ def save_image(image, prefix=None,
   else:
     filename = "%s.png" % prefix.split('.')[0]
   filename = os.path.join(path, filename)
-  if len(image.shape) == 4:
+  if image.shape[0] == 1:
     # Save only one image
     image = image[0]
-  cv2.imwrite(filename, image*255)
+  # if image.shape[-1] == 1:
+  #   image = image[:,:,0]
   # io.imsave(filename, image)
+  cv2.imwrite(filename, image)
   return filename
 
 
@@ -103,6 +107,38 @@ class Evaluator:
         save_image(model_pred, prefix=img_fn, 
                    path=out_dir)
   
+  def evaluate_ilsvrc(self):
+    """Function to evaluate on ImageNet classification."""
+    dataset = ImageNetDataProvider(batch_size=1,
+                                   subset="validation",
+                                   data_dir=FLAGS.in_dir,
+                                   )
+    images, labels = dataset.images, dataset.labels
+    num_val_examples = dataset.num_examples
+    curr_idx = 0
+    top_1_acc, top_5_acc = [], []
+    if not tf.gfile.Exists(self.out_dir):
+      tf.gfile.MakeDirs(self.out_dir)
+    outfile = os.path.join(
+        self.out_dir, "evaluation_results_%s.txt" % self.model_name)
+    predictions = self.build_model(images)
+    top_1_ct = tf.nn.in_top_k(predictions, labels, k=1)
+    top_5_ct = tf.nn.in_top_k(predictions, labels, k=5)
+    with tf.Session() as sess:
+      while curr_idx < num_val_examples:
+        top_1_np, top_5_np = sess.run([top_1_ct, top_5_ct])
+        top_1_acc.append(top_1_np)
+        top_5_acc.append(top_5_np)
+    print("Top 1 accuracy: %s \nTop 5 accuracy: %s" % (np.mean(top_1_acc),
+                                                       np.mean(top_5_acc)))
+    with tf.gfile.Open(outfile, "w") as f:
+      f.write("Model name: %s \n" % self.model_name)
+      metrics = {"top_1_accuracy": np.mean(top_1_acc),
+                 "top_5_accuracy": np.mean(top_5_acc),
+                 }
+      f.write(str(metrics))
+    return top_1_acc, top_5_acc
+
 
 def main(argv):
   del argv  # unused here
