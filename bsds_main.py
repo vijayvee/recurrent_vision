@@ -232,17 +232,13 @@ def main(argv):
   args["data_dir"] = os.path.join(gcs_root, args["data_dir"])
 
   num_train_examples, input_fn_train = get_input_fn_train(args)
-  # num_eval_examples, input_fn_val = get_input_fn_validation(args)
+
   args["num_train_examples"] = num_train_examples * args["num_epochs"]
   args["num_train_steps"] = args["num_train_examples"] // args["train_batch_size"]
   num_train_steps = args["num_train_steps"]
   num_train_steps_per_epoch = num_train_steps // args["num_epochs"]
   args["num_train_steps_per_epoch"] = num_train_steps_per_epoch
   
-  # args["num_eval_examples"] = num_eval_examples
-  # args["num_eval_steps"] = args["num_eval_examples"] // args["eval_batch_size"]
-  # num_eval_steps = args["num_eval_steps"]
-
   evaluate_every = int(args["evaluate_every"] * num_train_steps_per_epoch // args["train_batch_size"])
   tf.logging.info("Evaluating every %s steps"%(evaluate_every))
   warm_start_settings = tf.estimator.WarmStartSettings(
@@ -260,7 +256,8 @@ def main(argv):
                 tpu_config=tf.estimator.tpu.TPUConfig(
                                           # Since we use vx-8, i.e, 8 cores of vx tpu
                                           num_shards=8,
-                                          iterations_per_loop=100))
+                                          iterations_per_loop=100),
+                keep_checkpoint_max=20)
 
   classifier = tf.estimator.tpu.TPUEstimator(
                 use_tpu=args["use_tpu"],

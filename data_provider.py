@@ -332,7 +332,6 @@ class BSDSDataProvider:
     label = tf.decode_raw(sample["mask_raw"], tf.float32)
     height = sample["height"][0]
     width = sample["width"][0]
-    path = sample["image_path"]
     img = tf.reshape(img, (height, width, 3))
     label = tf.reshape(label, (height, width, 1))
     img_mask = tf.concat([img, label], axis=-1)
