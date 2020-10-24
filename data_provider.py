@@ -151,7 +151,7 @@ def preprocess_imagenet_for_train(image, image_size):
     A preprocessed image `Tensor`.
   """
   image = _random_crop(image, image_size=image_size)
-  image = standardize_image(image, "imagenet")
+  # image = standardize_image(image, "imagenet")
   image = tf.image.random_flip_left_right(image)
   image = tf.reshape(image, [image_size, image_size, 3])
   return image
@@ -257,7 +257,7 @@ class ImageNetDataProvider(object):
     iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
     self.images, self.labels, self.mask = iterator.get_next()
     self.num_classes = info.features["label"].num_classes + 1
-    self.class_names = ["unused"] + info.features["label"].names
+    self.class_names = info.features["label"].names
     self.num_examples = info.splits[subset].num_examples
 
   def _preprocess_fn(self, is_training):
@@ -293,17 +293,22 @@ class BSDSDataProvider:
     dataset = files.apply(tf.data.experimental.parallel_interleave(
                             self.fetch_dataset, cycle_length=threads, 
                             sloppy=True))
-    # shuffling dataset
-    dataset = dataset.shuffle(buffer_size=8 * self.batch_size, 
-                              seed=None)
+    dataset = dataset.map(self.decode_feats, 
+                          num_parallel_Calls=tf.data.experimental.AUTOTUNE)
+    if is_training:
+      # shuffling dataset
+      dataset = dataset.shuffle(buffer_size=8 * self.batch_size, 
+                                seed=None)
     dataset = dataset.repeat(count=None)
+    dataset = dataset.batch(self.batch_size, drop_remainder=True)
     # use decode function to retrieve images and labels
-    dataset = dataset.apply(
-                tf.data.experimental.map_and_batch(self.decode_feats,
-                                                   batch_size=self.batch_size,
-                                                   num_parallel_batches=threads,
-                                                   drop_remainder=True))
-    self.dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    #dataset = dataset.apply(
+    #            tf.data.experimental.map_and_batch(self.decode_feats,
+    #                                               batch_size=self.batch_size,
+    #                                               num_parallel_batches=threads,
+    #                                               drop_remainder=True))
+    dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    self.dataset = dataset
 
   def fetch_dataset(self, filename):
     """Fetch tf.data.Dataset from tfrecord filename."""

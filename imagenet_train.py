@@ -93,7 +93,7 @@ def model_fn(features, labels, mode, params):
                                         global_step,
                                         steps_per_epoch,
                                         decay_factor=0.1,
-                                        decay_epochs=30)
+                                        decay_epochs=5)
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
                               FLAGS.use_tpu)
@@ -103,15 +103,16 @@ def model_fn(features, labels, mode, params):
     gs_t = tf.reshape(global_step, [1])
     lr_t = tf.reshape(learning_rate, [1])
     loss_t = tf.reshape(loss, [1])
-    predicted_labels = tf.argmax(predictions, 1)
-    top_1_acc = tf.metrics.accuracy(predicted_labels, labels)
-    top_5_acc = tf.metrics.mean(
+    predicted_labels = tf.argmax(predictions, axis=1)
+    _, top_1_acc = tf.metrics.accuracy(predictions=predicted_labels, 
+                                       labels=labels)
+    _, top_5_acc = tf.metrics.mean(
                     tf.cast(tf.nn.in_top_k(predictions,
                                            labels,
                                            k=5), 
                             tf.float32))
-    top_1_acc = tf.reshape(top_1_acc[0], [1])
-    top_5_acc = tf.reshape(top_5_acc[0], [1])
+    top_1_acc = tf.reshape(top_1_acc, [1])
+    top_5_acc = tf.reshape(top_5_acc, [1])
 
     def host_call_fn(gs, lr, loss, top_1, top_5):
       """Training host call. Creates scalar summaries for training metrics.
@@ -139,7 +140,6 @@ def model_fn(features, labels, mode, params):
           tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
           tf.compat.v2.summary.scalar('training/top_1_accuracy',top_1[0], step=gs)
           tf.compat.v2.summary.scalar('training/top_5_accuracy',top_5[0], step=gs)
-          tf.compat.v2.summary.text('training/training_params',str(params),step=0)
           return tf.summary.all_v2_summary_ops()
 
     host_call_args = [gs_t, lr_t, loss_t, top_1_acc, top_5_acc]
@@ -248,7 +248,8 @@ def main(argv):
                 )
   start_timestamp = time.time()
   classifier.train(input_fn=input_fn_train, 
-                   max_steps=num_train_steps)
+                      max_steps=num_train_steps,
+                      )
   tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",
                   num_train_steps, int(time.time() - start_timestamp))
 
