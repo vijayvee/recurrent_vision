@@ -2,15 +2,10 @@
 from absl import app
 from absl import flags
 
-import cv2  # pylint: disable=import-error
 import os
-import matplotlib.pyplot as plt
-from skimage import io  # pylint: disable=import-error
 import numpy as np  
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
-from tqdm import tqdm
-from PIL import Image
 from recurrent_vision.data_provider import ImageNetDataProvider
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
 from recurrent_vision.models.vgg_v1net_config import vgg_v1net_config
@@ -28,6 +23,8 @@ flags.DEFINE_string("out_dir", "",
                     "Directory where predictions to be written")
 flags.DEFINE_string("checkpoint_dir", "",
                     "Directory where checkpoints are stored")
+flags.DEFINE_boolean("preprocess", False,
+                     "Whether to add imagenet mean subtraction")
 
 
 def load_image(image_path):
@@ -80,8 +77,8 @@ class Evaluator:
     elif self.model_name.startswith("vgg_16"):
       model_config = vgg_config()
     self.model = VGG(model_config)
-    _, endpoints = self.model.build_model(images, is_training=False)
-    predictions = endpoints["test_outputs"]
+    predictions, endpoints = self.model.build_model(images, is_training=False,
+                                                    preprocess=FLAGS.preprocess)
     return predictions
 
   def evaluate(self):
@@ -109,7 +106,7 @@ class Evaluator:
   
   def evaluate_ilsvrc(self):
     """Function to evaluate on ImageNet classification."""
-    dataset = ImageNetDataProvider(batch_size=1,
+    dataset = ImageNetDataProvider(batch_size=64,
                                    subset="validation",
                                    data_dir=FLAGS.in_dir,
                                    )
@@ -121,14 +118,21 @@ class Evaluator:
       tf.gfile.MakeDirs(self.out_dir)
     outfile = os.path.join(
         self.out_dir, "evaluation_results_%s.txt" % self.model_name)
-    predictions = self.build_model(images)
-    top_1_ct = tf.nn.in_top_k(predictions, labels, k=1)
-    top_5_ct = tf.nn.in_top_k(predictions, labels, k=5)
+    predictions  = self.build_model(images)
     with tf.Session() as sess:
+      self.model.restore_checkpoint(sess, self.checkpoint_dir)
+      top_1_ct = tf.nn.in_top_k(predictions, labels, k=1)
+      top_5_ct = tf.nn.in_top_k(predictions, labels, k=5)
       while curr_idx < num_val_examples:
         top_1_np, top_5_np = sess.run([top_1_ct, top_5_ct])
         top_1_acc.append(top_1_np)
         top_5_acc.append(top_5_np)
+        curr_idx += len(top_1_np)
+        print("Evaluated %s examples \n Top 1: %s Top 5: %s" % (curr_idx,
+                                                                round(np.mean(top_1_acc)*100,3),
+                                                                round(np.mean(top_5_acc)*100,3)
+                                                                )
+                                                                )
     print("Top 1 accuracy: %s \nTop 5 accuracy: %s" % (np.mean(top_1_acc),
                                                        np.mean(top_5_acc)))
     with tf.gfile.Open(outfile, "w") as f:
@@ -143,7 +147,7 @@ class Evaluator:
 def main(argv):
   del argv  # unused here
   evaluator = Evaluator()
-  evaluator.evaluate()
+  evaluator.evaluate_ilsvrc()
 
 
 if __name__=="__main__":
