@@ -278,7 +278,7 @@ class BSDSDataProvider:
                ):
     self.batch_size = batch_size
     self.image_h, self.image_w = image_size
-    threads = multiprocessing.cpu_count()
+    # threads = multiprocessing.cpu_count()
     # load tfrecord files
     if is_training:
       self.training = True
@@ -291,23 +291,25 @@ class BSDSDataProvider:
     files = tf.data.Dataset.list_files(glob_pattern, shuffle=is_training)
     # parallel fetching of tfrecords dataset
     dataset = files.apply(tf.data.experimental.parallel_interleave(
-                            self.fetch_dataset, cycle_length=threads, 
+                            self.fetch_dataset, 
+                            cycle_length=tf.data.experimental.AUTOTUNE, 
                             sloppy=True))
     dataset = dataset.map(self.decode_feats, 
-                          num_parallel_Calls=tf.data.experimental.AUTOTUNE)
+                          num_parallel_calls=tf.data.experimental.AUTOTUNE)
     if is_training:
       # shuffling dataset
-      dataset = dataset.shuffle(buffer_size=8 * self.batch_size, 
-                                seed=None)
-    dataset = dataset.repeat(count=None)
+      dataset = dataset.shuffle(buffer_size=1024)
+    dataset = dataset.repeat(-1 if is_training else 1)
     dataset = dataset.batch(self.batch_size, drop_remainder=True)
     # use decode function to retrieve images and labels
-    #dataset = dataset.apply(
+    # dataset = dataset.apply(
     #            tf.data.experimental.map_and_batch(self.decode_feats,
     #                                               batch_size=self.batch_size,
     #                                               num_parallel_batches=threads,
     #                                               drop_remainder=True))
-    dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
+    self.images, self.labels = iterator.get_next()
     self.dataset = dataset
 
   def fetch_dataset(self, filename):
