@@ -27,6 +27,10 @@ flags.DEFINE_integer("eval_batch_size", 1,
                      "Evaluation minibatch size")
 flags.DEFINE_integer("evaluate_every", 1,
                      "Evaluation frequency (every x epochs)")
+flags.DEFINE_integer("num_cores", 8,
+                     "Number of TPU cores")
+flags.DEFINE_integer("iterations_per_loop", 5000,
+                     "Number of iterations per TPU loop")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
 flags.DEFINE_string("checkpoint", "",
@@ -250,13 +254,13 @@ def main(argv):
                 args["tpu_name"] if args["use_tpu"] else "",
                 zone=args["tpu_zone"],
                 project="desalab-tpu")
+  tpu_config = tf.estimator.tpu.TPUConfig(num_shards=args["num_cores"],
+                                          iterations_per_loop=args["iterations_per_loop"])
   config = tf.estimator.tpu.RunConfig(
                 cluster=tpu_cluster_resolver,
                 model_dir=model_dir,
-                tpu_config=tf.estimator.tpu.TPUConfig(
-                                          # Since we use vx-8, i.e, 8 cores of vx tpu
-                                          num_shards=8,
-                                          iterations_per_loop=100),
+                tpu_config=tpu_config,
+                save_checkpoint_steps=args["iterations_per_loop"],
                 keep_checkpoint_max=20)
 
   classifier = tf.estimator.tpu.TPUEstimator(
