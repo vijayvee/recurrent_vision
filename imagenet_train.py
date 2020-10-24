@@ -47,7 +47,7 @@ flags.DEFINE_string("tpu_name", "",
                     "Name of TPU to use") 
 flags.DEFINE_string("tpu_zone", "europe-west4-a",
                     "TPU zone (europe-west4-a, etc.)")
-flags.DEFINE_string("data_dir", "",
+flags.DEFINE_string("data_dir", "gs://v1net-tpu-bucket/imagenet_data/",
                     "Data directory with ImageNet dataset")
 
 
@@ -64,7 +64,7 @@ def model_fn(features, labels, mode, params):
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_config(add_v1net_early=FLAGS.add_v1net_early)
   vgg = VGG(cfg)
-  predictions, _ = vgg.build_model(images=features["image"],
+  predictions, _ = vgg.build_model(images=features,
                                    is_training=training,
                                    preprocess=True,
                                    )
@@ -77,10 +77,11 @@ def model_fn(features, labels, mode, params):
     }
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
-  loss_fn = tf.nn.cross_entropy_with_logits
+  loss_fn = tf.nn.softmax_cross_entropy_with_logits
   loss_xent = tf.reduce_mean(loss_fn(logits=predictions,
                                      labels=one_hot_labels,
                                      ))
+  # TODO(vveeraba): Test if layer normalization is taken into account below
   loss = loss_xent + FLAGS.weight_decay * tf.add_n(
                 [tf.nn.l2_loss(v) for v in tf.trainable_variables()
                            if 'batch_normalization' not in v.name])
@@ -102,14 +103,15 @@ def model_fn(features, labels, mode, params):
     gs_t = tf.reshape(global_step, [1])
     lr_t = tf.reshape(learning_rate, [1])
     loss_t = tf.reshape(loss, [1])
-    top_1_acc = tf.reduce_sum(tf.nn.in_top_k(predictions,
-                                             labels,
-                                             k=1))
-    top_5_acc = tf.reduce_sum(tf.nn.in_top_k(predictions,
-                                             labels,
-                                             k=5))
-    top_1_acc = tf.reshape(top_1_acc, [1])
-    top_5_acc = tf.reshape(top_5_acc, [1])
+    predicted_labels = tf.argmax(predictions, 1)
+    top_1_acc = tf.metrics.accuracy(predicted_labels, labels)
+    top_5_acc = tf.metrics.mean(
+                    tf.cast(tf.nn.in_top_k(predictions,
+                                           labels,
+                                           k=5), 
+                            tf.float32))
+    top_1_acc = tf.reshape(top_1_acc[0], [1])
+    top_5_acc = tf.reshape(top_5_acc[0], [1])
 
     def host_call_fn(gs, lr, loss, top_1, top_5):
       """Training host call. Creates scalar summaries for training metrics.
@@ -121,17 +123,17 @@ def model_fn(features, labels, mode, params):
       Arguments should match the list of `Tensor` objects passed as the second
       element in the tuple passed to `host_call`.
       Args:
-      gs: `Tensor with shape `[batch]` for the global_step
-      loss: `Tensor` with shape `[batch]` for the training loss.
-      loss_side: `Tensor` with shape `[batch]` for the training side loss.
-      loss_fuse: `Tensor` with shape `[batch]` for the training fused loss.
-      img: `Tensor` of input images.
-          Returns:
-      List of summary ops to run on the CPU host.
+        gs: `Tensor with shape `[1]` for the global_step
+        lr:`Tensor` with shape[1] for learning rate
+        loss: `Tensor` with shape `[1]` for the training loss.
+        top_1: `Tensor` with shape `[1]` for top-1 accuracy.
+        top_5: `Tensor` with shape `[5]` for top-5 accuracy.
+      Returns:
+        List of summary ops to run on the CPU host.
       """
       gs = gs[0]
       with tf.compat.v2.summary.create_file_writer(params['model_dir'],
-						   max_queue=32).as_default():
+						   max_queue=params['iterations_per_loop']).as_default():
         with tf.compat.v2.summary.record_if(True):
           tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
           tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
@@ -207,11 +209,6 @@ def main(argv):
   tf.set_random_seed(rand_seed)
   args["random_seed"] = rand_seed
   warm_start_settings = None
-  if args["data_dir"]:
-    args["data_dir"] = os.path.join(gcs_root, args["data_dir"])
-  else:
-    args["data_dir"] = None
-
   num_train_examples, input_fn_train = get_input_fn_train(args)
 
   args["num_train_examples"] = num_train_examples * args["num_epochs"]
