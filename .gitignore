@@ -2,4 +2,6 @@
 *pycache*
 *npy
 *tfrecord
+*ckpt
+models/pretrained_nets/checkpoints/
 results/*
