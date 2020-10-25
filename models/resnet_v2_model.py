@@ -15,10 +15,7 @@ class ResNetV2(ModelBuilder):
     
   def preprocess(self, images):
     """Model-specific preprocessing of input images."""
-    images = tf.image.resize(images, 
-                             [self.image_size,
-                             self.image_size],
-                             )
+    images = images - self.model_config.mean_rgb
     return images
 
   def to_1000_classes(self, logits):
