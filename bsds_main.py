@@ -25,11 +25,9 @@ flags.DEFINE_integer("train_batch_size", 1,
                      "Training minibatch size")
 flags.DEFINE_integer("eval_batch_size", 1,
                      "Evaluation minibatch size")
-flags.DEFINE_integer("evaluate_every", 1,
-                     "Evaluation frequency (every x epochs)")
 flags.DEFINE_integer("num_cores", 8,
                      "Number of TPU cores")
-flags.DEFINE_integer("iterations_per_loop", 5000,
+flags.DEFINE_integer("iterations_per_loop", 1000,
                      "Number of iterations per TPU loop")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
@@ -68,7 +66,8 @@ def model_fn(features, labels, mode, params):
   cfg = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early)
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
-                                           is_training=training)
+                                           is_training=training,
+                                           preprocess=False)
   # TODO(vveeraba): Add vgg restore checkpoint
   # Tile ground truth for 5 side outputs
   side_predictions = endpoints["side_outputs_fullres"]
@@ -146,16 +145,15 @@ def model_fn(features, labels, mode, params):
       """
       gs = gs[0]
       with tf.compat.v2.summary.create_file_writer(params['model_dir'],
-						   max_queue=32).as_default():
+						   max_queue=100).as_default():
         with tf.compat.v2.summary.record_if(True):
           tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
           tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
           tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
           tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
           tf.compat.v2.summary.image('training/images',img,step=gs)
-          tf.compat.v2.summary.image('training/labels',lbls,step=gs)
           tf.compat.v2.summary.image('training/predictions',1-preds,step=gs)
-          tf.compat.v2.summary.text('training/training_params',str(params),step=0)
+          tf.compat.v2.summary.image('training/labels',1-lbls,step=gs)
           return tf.summary.all_v2_summary_ops()
 
     host_call_args = [gs_t, lr_t, loss_t, loss_side_t, 
@@ -177,8 +175,6 @@ def model_fn(features, labels, mode, params):
                                            mode=mode, loss=loss, 
                                            eval_metrics=eval_metrics,
                                            host_call=host_call,
-                                           # TODO(vveeraba): skipping scaffold_Fn
-                                           # scaffold_fn=scaffold_fn,
                                            )
 
 
@@ -243,8 +239,6 @@ def main(argv):
   num_train_steps_per_epoch = num_train_steps // args["num_epochs"]
   args["num_train_steps_per_epoch"] = num_train_steps_per_epoch
   
-  evaluate_every = int(args["evaluate_every"] * num_train_steps_per_epoch // args["train_batch_size"])
-  tf.logging.info("Evaluating every %s steps"%(evaluate_every))
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
                                         vars_to_warm_start="^(?!.*side_output|.*Momentum|.*v1net)",
@@ -260,7 +254,7 @@ def main(argv):
                 cluster=tpu_cluster_resolver,
                 model_dir=model_dir,
                 tpu_config=tpu_config,
-                save_checkpoint_steps=args["iterations_per_loop"],
+                save_checkpoints_steps=args["iterations_per_loop"],
                 keep_checkpoint_max=20)
 
   classifier = tf.estimator.tpu.TPUEstimator(
@@ -270,25 +264,11 @@ def main(argv):
                 params=args,
                 warm_start_from=warm_start_settings,
                 train_batch_size=args["train_batch_size"],
-                eval_batch_size=args["eval_batch_size"],
                 )
 
-  try:
-    current_step = tf.train.load_variable(model_dir,
-                                          tf.GraphKeys.GLOBAL_STEP)
-  except (TypeError, ValueError, tf.errors.NotFoundError):
-    current_step = 0
   start_timestamp = time.time()
-  while current_step < num_train_steps:
-    # Train until next evaluation step
-    next_checkpoint = min(current_step + evaluate_every,
-                          num_train_steps)
-    classifier.train(
-        input_fn=input_fn_train, max_steps=next_checkpoint)
-    current_step = next_checkpoint
-
-    tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",
-                    next_checkpoint, int(time.time() - start_timestamp))
+  classifier.train(
+        input_fn=input_fn_train, max_steps=num_train_steps)
   elapsed_time = int(time.time() - start_timestamp)
   tf.logging.info("Finished training up to step %d. Elapsed seconds %d.",
                           num_train_steps, elapsed_time)
