@@ -15,7 +15,7 @@ ADD_V1NET_EARLY=True
 TPU_NAME=$1
 
 echo "Running on {$1}"
-python imagenet_train.py \
+python main_imagenet.py \
 	--learning_rate=${LEARNING_RATE} \
 	--weight_decay=${WEIGHT_DECAY} \
 	--num_epochs=${NUM_EPOCHS} \
