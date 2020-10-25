@@ -15,7 +15,7 @@ TPU_NAME=$1
 DATA_DIR="bsds_data/HED-BSDS/tfrecords"
 
 echo "Running on {$1}"
-python bsds_main.py \
+python main_bsds.py \
 	--learning_rate=${LEARNING_RATE} \
 	--weight_decay=${WEIGHT_DECAY} \
 	--num_epochs=${NUM_EPOCHS} \
