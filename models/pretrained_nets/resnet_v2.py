@@ -105,6 +105,7 @@ def resnet_v2(inputs,
               include_root_block=True,
               spatial_squeeze=True,
               add_v1net=False,
+              add_v1net_early=False,
               reuse=None,
               scope=None):
   """Generator for v2 (preactivation) ResNet models.
@@ -181,10 +182,14 @@ def resnet_v2(inputs,
           with slim.arg_scope([slim.conv2d],
                               activation_fn=None, normalizer_fn=None):
             net = resnet_utils.conv2d_same(net, 64, 7, stride=2, scope='conv1')
-          if add_v1net:
-            v1_timesteps, v1_kernel_size = 6, 5
-            tf.logging.info("Adding V1Net block with %s timesteps and %s kernel_size" % (v1_timesteps, v1_kernel_size))
-            net = build_v1net(inputs=net, filters=64, timesteps=v1_timesteps, kernel_size=v1_kernel_size)
+          if add_v1net_early:
+            with tf.variable_scope("v1net-conv1"):
+              net = slim.conv2d(net, 32, [1,1])
+              v1_timesteps, v1_kernel_size, n_filters = 4, 3, 32
+              net = build_v1net(inputs=net, filters=n_filters,
+                                timesteps=v1_timesteps,
+                                kernel_size=v1_kernel_size)
+              net = slim.conv2d(net, 64, [1,1])
           net = slim.max_pool2d(net, [3, 3], stride=2, scope='pool1')
         net = resnet_utils.stack_blocks_dense(net, blocks, output_stride)
         # This is needed because the pre-activation variant does not have batch
@@ -242,6 +247,7 @@ def resnet_v2_50(inputs,
                  output_stride=None,
                  spatial_squeeze=True,
                  add_v1net=False,
+                 add_v1net_early=False,
                  reuse=None,
                  scope='resnet_v2_50'):
   """ResNet-50 model of [1]. See resnet_v2() for arg and return description."""
@@ -254,7 +260,8 @@ def resnet_v2_50(inputs,
   return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
                    global_pool=global_pool, output_stride=output_stride,
                    include_root_block=True, spatial_squeeze=spatial_squeeze,
-                   add_v1net=add_v1net, reuse=reuse, scope=scope)
+                   add_v1net=add_v1net, add_v1net_early=False, 
+                   reuse=reuse, scope=scope)
 resnet_v2_50.default_image_size = resnet_v2.default_image_size
 
 
@@ -265,6 +272,7 @@ def resnet_v2_101(inputs,
                   output_stride=None,
                   spatial_squeeze=True,
                   add_v1net=False,
+                  add_v1net_early=False,
                   reuse=None,
                   scope='resnet_v2_101'):
   """ResNet-101 model of [1]. See resnet_v2() for arg and return description."""
@@ -277,7 +285,8 @@ def resnet_v2_101(inputs,
   return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
                    global_pool=global_pool, output_stride=output_stride,
                    include_root_block=True, spatial_squeeze=spatial_squeeze,
-                   add_v1net=add_v1net, reuse=reuse, scope=scope)
+                   add_v1net=add_v1net, add_v1net_early=False, 
+                   reuse=reuse, scope=scope)
 resnet_v2_101.default_image_size = resnet_v2.default_image_size
 
 
@@ -288,6 +297,7 @@ def resnet_v2_152(inputs,
                   output_stride=None,
                   spatial_squeeze=True,
                   add_v1net=False,
+                  add_v1net_early=False,
                   reuse=None,
                   scope='resnet_v2_152'):
   """ResNet-152 model of [1]. See resnet_v2() for arg and return description."""
@@ -300,7 +310,8 @@ def resnet_v2_152(inputs,
   return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
                    global_pool=global_pool, output_stride=output_stride,
                    include_root_block=True, spatial_squeeze=spatial_squeeze,
-                   add_v1net=add_v1net, reuse=reuse, scope=scope)
+                   add_v1net=add_v1net, add_v1net_early=False,
+                   reuse=reuse, scope=scope)
 resnet_v2_152.default_image_size = resnet_v2.default_image_size
 
 
@@ -311,6 +322,7 @@ def resnet_v2_200(inputs,
                   output_stride=None,
                   spatial_squeeze=True,
                   add_v1net=False,
+                  add_v1net_early=False,
                   reuse=None,
                   scope='resnet_v2_200'):
   """ResNet-200 model of [2]. See resnet_v2() for arg and return description."""
@@ -323,5 +335,6 @@ def resnet_v2_200(inputs,
   return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
                    global_pool=global_pool, output_stride=output_stride,
                    include_root_block=True, spatial_squeeze=spatial_squeeze,
-                   add_v1net=add_v1net, reuse=reuse, scope=scope)
+                   add_v1net=add_v1net, add_v1net_early=False,
+                   reuse=reuse, scope=scope)
 resnet_v2_200.default_image_size = resnet_v2.default_image_size

@@ -9,6 +9,8 @@ import numpy as np
 from recurrent_vision.data_provider import ImageNetDataProvider
 from recurrent_vision.models.vgg_config import vgg_config
 from recurrent_vision.models.vgg_model import VGG
+from recurrent_vision.models.resnet_v2_config import resnet_v2_config
+from recurrent_vision.models.resnet_v2_model import ResNetV2
 from recurrent_vision.optimizers import get_optimizer, build_learning_rate
 
 tf.disable_v2_behavior()
@@ -37,6 +39,8 @@ flags.DEFINE_string("checkpoint", "",
                     "Checkpoint filename")
 flags.DEFINE_string("optimizer", "momentum",
                     "Optimizer algorithm (Adam, SGD, etc.)")
+flags.DEFINE_string("model_name", "vgg_16",
+                    "Model name for training")
 flags.DEFINE_boolean("use_tpu", True,
                      "Whether to use TPU for training")
 flags.DEFINE_boolean("evaluate", False,
@@ -62,12 +66,16 @@ def model_fn(features, labels, mode, params):
   eval_metrics, train_op, loss = None, None, None
   host_call = None
   training = mode == tf.estimator.ModeKeys.TRAIN
-  cfg = vgg_config(add_v1net_early=FLAGS.add_v1net_early)
-  vgg = VGG(cfg)
-  predictions, _ = vgg.build_model(images=features,
-                                   is_training=training,
-                                   preprocess=True,
-                                   )
+  if params["model_name"].startswith("vgg_16"):
+    cfg = vgg_config(add_v1net_early=FLAGS.add_v1net_early)
+    model = VGG(cfg)
+  elif params["model_name"].startwith("resnet_v2_50"):
+    cfg = resnet_v2_config(add_v1net_early=FLAGS.add_v1net_early)
+    model = ResNetV2(cfg)
+  predictions, _ = model.build_model(images=features,
+                                     is_training=training,
+                                     preprocess=True,
+                                     )
   one_hot_labels = tf.one_hot(labels, depth=1000)
   # output predictions
   if mode == tf.estimator.ModeKeys.PREDICT:
