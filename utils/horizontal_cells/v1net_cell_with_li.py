@@ -1,6 +1,9 @@
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from tensorflow.python.framework import tensor_shape  # pylint: disable=import-error
+from tensorflow.python.ops import array_ops  # pylint: disable=import-error
 from tensorflow.python.ops import init_ops  # pylint: disable=import-error
+from tensorflow.python.ops import math_ops  # pylint: disable=import-error
+from tensorflow.python.ops import nn_ops  # pylint: disable=import-error
 from tensorflow.python.ops import rnn_cell_impl  # pylint: disable=import-error
 from tensorflow.python.ops import variable_scope as vs  # pylint: disable=import-error
 
@@ -89,22 +92,32 @@ class V1Net_BN_cell(rnn_cell_impl.RNNCell):
                                   initializers=self.initializers,
                                   dtype=inputs.dtype
                                   )
-    conv_xh, conv_exc, conv_shunt = new_hidden
-    xh_tensors = tf.split(conv_xh,
-                          num_or_size_splits=4,
-                          axis=-1,
-                          )
-    input_gate, forget_gate, input_hor, output_gate = xh_tensors
-    hidden_hor = (conv_exc, conv_shunt)
+    conv_x, conv_h, conv_exc, conv_inh, conv_shunt = new_hidden
+    X_i, X_f, X_c, X_o = array_ops.split(conv_x,
+                                         num_or_size_splits=4,
+                                         axis=-1,
+                                         )
+    H_i, H_f, H_o = array_ops.split(conv_h,
+                                    num_or_size_splits=3,
+                                    axis=-1,
+                                    )
+    H_exc, H_inh, H_shunt = conv_exc, conv_inh, conv_shunt
     
+    # computing the gates
+    input_gate = tf.math.add(X_i, H_i, name='input_gate')
+    forget_gate = tf.math.add(X_f, H_f, name='forget_gate')
+    output_gate = tf.math.add(X_o, H_o, name='output_gate')
+
+    # computing horizontal push/pull
+    input_hor, hidden_hor = X_c, (H_exc, H_inh, H_shunt)
     new_input = _horizontal(input_hor, hidden_hor, self.control)
-    new_cell = tf.nn.sigmoid(forget_gate) * cell
-    new_cell += tf.nn.sigmoid(input_gate) * tf.nn.tanh(new_input)
-    new_cell = tf.keras.layers.LayerNormalization()(new_cell)
+    new_cell = math_ops.sigmoid(forget_gate) * cell
+    new_cell += math_ops.sigmoid(input_gate) * tf.nn.tanh(new_input)
+    new_cell = tf.keras.layers.LayerNormalization()(new_cell)  # (new_cell)
     if activation_fn:
-      output = activation_fn(new_cell) * tf.nn.sigmoid(output_gate)
+      output = activation_fn(new_cell) * math_ops.sigmoid(output_gate)
     else:
-      output = new_cell * tf.nn.sigmoid(output_gate)
+      output = new_cell * math_ops.sigmoid(output_gate)
     new_state = rnn_cell_impl.LSTMStateTuple(new_cell, output)
     return output, new_state
 
@@ -123,7 +136,7 @@ def get_activation(activation):
 def _horizontal(input_hor, hidden_hor, control=False):
   """Function to perform hidden push pull
   integration in a linear-nonlinear fashion"""
-  X_c, (H_exc, H_shunt) = input_hor, hidden_hor
+  X_c, (H_exc, H_inh, H_shunt) = input_hor, hidden_hor
   k_in = X_c.shape.as_list()[-1]
   dtype = X_c.dtype
   if control:
@@ -135,14 +148,14 @@ def _horizontal(input_hor, hidden_hor, control=False):
                    [k_in], initializer=get_initializer(dtype),
                    dtype=dtype)
       beta = vs.get_variable(
-                   "exc_control",
+                   "sub_inh_control",
                    [k_in], initializer=get_initializer(dtype),
                    dtype=dtype)
-      context_mod = tf.nn.sigmoid(alpha) * tf.nn.relu(H_shunt) * (X_c + tf.nn.sigmoid(beta) * tf.nn.relu(H_exc)) 
+      context_mod = tf.nn.sigmoid(alpha) * tf.nn.relu(H_shunt) * (X_c + tf.nn.relu(H_exc) - tf.nn.sigmoid(beta) * tf.nn.relu(H_inh)) 
   else:
     with tf.variable_scope("horizontal_processing",
                            reuse=tf.AUTO_REUSE):
-      context_mod = tf.nn.sigmoid(H_shunt) * (X_c + tf.nn.sigmoid(H_exc))
+      context_mod = tf.nn.sigmoid(H_shunt) * (X_c + tf.nn.sigmoid(H_exc) - tf.nn.sigmoid(H_inh))  # divisive inhibition
   return context_mod
 
 
@@ -156,8 +169,8 @@ def get_initializer(dtype=tf.float32):
 
 def _separable_conv(args, filter_size, output_channels, bias,
                     inh_mult=1.5, exc_mult=3, bias_start=0.0,
-                    activation=None, initializers=None, 
-                    pointwise=False, channel_multiplier=1,
+                    activation=None, initializers=None, pointwise=False,
+                    channel_multiplier=1,
                     dtype=tf.float32):
   """Separable Convolution.
   Args:
@@ -175,33 +188,62 @@ def _separable_conv(args, filter_size, output_channels, bias,
   # Calculate the total size of arguments on dimension 1.
   shapes = [a.get_shape().as_list() for a in args]
   shape_length = len(shapes[0])
-
+  n_args = len(args)
   input, hidden = args
-  h_arg_depth = shapes[1][-1]
-  x_h = tf.concat([input, hidden], axis=-1)
-  xh_arg_depth = x_h.shape.as_list()[-1]
+  if n_args > 2:
+    raise ValueError("Expected only two "
+                     "arguments (input, hidden)")
 
+  for shape in shapes:
+    if len(shape) != 4:
+      raise ValueError("Expected only 4-D arrays of "
+                       "form [n,h,w,c] for performing 2D convolutions"
+                       )
+    if len(shape) != len(shapes[0]):
+      raise ValueError("Conv Linear expects all args "
+                       "to be of same Dimension: %s" % str(shapes))
+  x_arg_depth = shapes[0][-1]
+  h_arg_depth = shapes[1][-1]
   separable_conv_op = tf.nn.separable_conv2d
   strides = shape_length * [1]
-
+  filter_size_h = filter_size
   if pointwise:
-    filter_size = [1, 1]
+    filter_size_h = [1, 1]
     print('Pointwise gates added')
-
   f_h, f_w = filter_size
   f_h_inh, f_w_inh = int(f_h * inh_mult), int(f_w * inh_mult)
   f_h_exc, f_w_exc = int(f_h * exc_mult), int(f_w * exc_mult)
   filter_size_inh = [f_h_inh, f_w_inh]
   filter_size_exc = [f_h_exc, f_w_exc]
-
   # Build input and hidden kernels
-  xh_kernel = vs.get_variable(
-    "input_hidden_kernel", filter_size + [xh_arg_depth, channel_multiplier],
+  x_kernel = vs.get_variable(
+    "input_kernel", filter_size + [x_arg_depth, channel_multiplier],
     initializer=get_initializer(dtype),
     dtype=dtype)
 
-  xh_kernel_ps = vs.get_variable(
-    "input_hidden_kernel_ps", [1, 1, channel_multiplier * xh_arg_depth, output_channels * 4],
+  x_kernel_ps = vs.get_variable(
+    "input_kernel_ps", [1, 1, channel_multiplier * x_arg_depth, output_channels * 4],
+    initializer=get_initializer(dtype),
+    dtype=dtype)
+
+  # Build hidden state kernels
+  h_kernel_gates = vs.get_variable(
+    "hidden_kernel_g", filter_size_h + [h_arg_depth, channel_multiplier],
+    initializer=get_initializer(dtype),
+    dtype=dtype)
+
+  h_kernel_gates_ps = vs.get_variable(
+    "hidden_kernel_g_ps", [1, 1, channel_multiplier * h_arg_depth, output_channels * 3],
+    initializer=get_initializer(dtype),
+    dtype=dtype)
+
+  # TODO: find optimal l1 strength
+  h_kernel_inh = vs.get_variable(
+    "hidden_kernel_inh", filter_size_inh + [h_arg_depth, channel_multiplier],
+    initializer=get_initializer(dtype),
+    dtype=dtype)
+  h_kernel_inh_ps = vs.get_variable(
+    "hidden_kernel_inh_ps", [1, 1, h_arg_depth * channel_multiplier, output_channels],
     initializer=get_initializer(dtype),
     dtype=dtype)
 
@@ -209,7 +251,6 @@ def _separable_conv(args, filter_size, output_channels, bias,
     "hidden_kernel_shunt", filter_size_inh + [h_arg_depth, channel_multiplier],
     initializer=get_initializer(dtype),
     dtype=dtype)
-
   h_kernel_shunt_ps = vs.get_variable(
     "hidden_kernel_shunt_ps", [1, 1, h_arg_depth * channel_multiplier, output_channels],
     initializer=get_initializer(dtype),
@@ -219,61 +260,86 @@ def _separable_conv(args, filter_size, output_channels, bias,
     "hidden_kernel_exc", filter_size_exc + [h_arg_depth, channel_multiplier],
     initializer=get_initializer(dtype),
     dtype=dtype)
-
   h_kernel_exc_ps = vs.get_variable(
     "hidden_kernel_exc_ps", [1, 1, h_arg_depth * channel_multiplier, output_channels],
     initializer=get_initializer(dtype),
     dtype=dtype)
+  res_x = separable_conv_op(input,
+                            x_kernel,
+                            x_kernel_ps,
+                            strides,
+                            padding="SAME")
 
-  res_xh = separable_conv_op(x_h,
-                             xh_kernel,
-                             xh_kernel_ps,
-                             strides,
-                             padding="SAME")
-
+  res_h_gates = separable_conv_op(hidden,
+                                  h_kernel_gates,
+                                  h_kernel_gates_ps,
+                                  strides,
+                                  padding="SAME")
+  res_h_inh = separable_conv_op(hidden,
+                                h_kernel_inh,
+                                h_kernel_inh_ps,
+                                strides,
+                                padding="SAME")
   res_h_exc = separable_conv_op(hidden,
                                 h_kernel_exc,
                                 h_kernel_exc_ps,
                                 strides,
                                 padding="SAME")
-
   res_h_shunt = separable_conv_op(hidden,
                                   h_kernel_shunt,
                                   h_kernel_shunt_ps,
                                   strides,
                                   padding="SAME")
-
-  bias_xh = vs.get_variable(
-    "biases_input_hidden", [output_channels * 4],
-    dtype=dtype, initializer=init_ops.constant_initializer(
-                                        bias_start,
-                                        dtype=dtype))
-  
+  bias_input = vs.get_variable(
+    "biases_input", [output_channels * 4],
+    dtype=dtype,
+    initializer=init_ops.constant_initializer(
+      bias_start,
+      dtype=dtype))
+  bias_hidden_gates = vs.get_variable(
+    "biases_hidden_g", [output_channels * 3],
+    dtype=dtype,
+    initializer=init_ops.constant_initializer(
+      bias_start,
+      dtype=dtype))
   bias_hidden_exc = vs.get_variable(
-    "biases_hidden_exc", [output_channels],
-    dtype=dtype, initializer=init_ops.constant_initializer(
-                                        bias_start,
-                                        dtype=dtype))
-
+    "biases_hidden_e", [output_channels],
+    dtype=dtype,
+    initializer=init_ops.constant_initializer(
+      bias_start,
+      dtype=dtype))
+  bias_hidden_inh = vs.get_variable(
+    "biases_hidden_i", [output_channels],
+    dtype=dtype,
+    initializer=init_ops.constant_initializer(
+      bias_start,
+      dtype=dtype))
   bias_hidden_shunt = vs.get_variable(
     "biases_hidden_shunt", [output_channels],
-    dtype=dtype, initializer=init_ops.constant_initializer(
-                                        bias_start,
-                                        dtype=dtype))
-
-  res_input_hidden = tf.math.add(res_xh,
-                          bias_xh,
-                          name='conv_input_hidden'
+    dtype=dtype,
+    initializer=init_ops.constant_initializer(
+      bias_start,
+      dtype=dtype))
+  res_input = tf.math.add(res_x,
+                          bias_input,
+                          name='conv_input_gates'
                           )
-
+  res_hidden_gates = tf.math.add(res_h_gates,
+                                 bias_hidden_gates,
+                                 name='conv_hidden_gates'
+                                 )
+  res_hidden_inh = tf.math.add(res_h_inh,
+                               bias_hidden_inh,
+                               name='conv_hidden_inh'
+                               )
+  res_hidden_shunt = tf.math.add(res_h_shunt,
+                                 bias_hidden_shunt,
+                                 name='conv_hidden_shunt'
+                                 )
   res_hidden_exc = tf.math.add(res_h_exc,
                                bias_hidden_exc,
                                name='conv_hidden_exc'
                                )
-
-  res_hidden_shunt = tf.math.add(res_h_shunt,
-                                bias_hidden_shunt,
-                                name='conv_hidden_shunt'
-                                )
-
-  return (res_input_hidden, res_hidden_exc, res_hidden_shunt)
+  return (res_input, res_hidden_gates,
+          res_hidden_exc, res_hidden_inh,
+          res_hidden_shunt)
