@@ -200,7 +200,6 @@ def preprocess_imagenet(data,
     mask to track padded vs reral data.
   """
   # Create a mask variable to track the real vs padded data in the last batch.
-  mask = 1.
   image = data["image"]
 
   label = data["label"]
@@ -208,10 +207,10 @@ def preprocess_imagenet(data,
 
   if is_training:
     return preprocess_imagenet_for_train(
-        image, image_size=image_size), label, mask
+        image, image_size=image_size), label
   else:
     return preprocess_imagenet_for_eval(
-        image, image_size=image_size, crop=crop), label, mask
+        image, image_size=image_size, crop=crop), label
 
 
 # ========= ImageNet data provider. ============
@@ -249,13 +248,13 @@ class ImageNetDataProvider(object):
     info = dataset_builder.info
     if is_training:
       # 4096 is ~0.625 GB of RAM. Reduce if memory issues encountered.
-      dataset = dataset.shuffle(buffer_size=4096)
+      dataset = dataset.shuffle(buffer_size=1024)
     dataset = dataset.repeat(-1 if is_training else 1)
     dataset = dataset.batch(batch_size, drop_remainder=is_training)
 
-    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-    iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
-    self.images, self.labels, self.mask = iterator.get_next()
+    self.dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    #iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
+    #self.images, self.labels, self.mask = iterator.get_next()
     self.num_classes = info.features["label"].num_classes + 1
     self.class_names = info.features["label"].names
     self.num_examples = info.splits[subset].num_examples
@@ -278,7 +277,7 @@ class BSDSDataProvider:
                ):
     self.batch_size = batch_size
     self.image_h, self.image_w = image_size
-    # threads = multiprocessing.cpu_count()
+    threads = multiprocessing.cpu_count()
     # load tfrecord files
     if is_training:
       self.training = True
@@ -292,14 +291,14 @@ class BSDSDataProvider:
     # parallel fetching of tfrecords dataset
     dataset = files.apply(tf.data.experimental.parallel_interleave(
                             self.fetch_dataset, 
-                            cycle_length=tf.data.experimental.AUTOTUNE, 
+                            cycle_length=threads, 
                             sloppy=True))
     dataset = dataset.map(self.decode_feats, 
-                          num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                          num_parallel_calls=threads)
     if is_training:
       # shuffling dataset
-      dataset = dataset.shuffle(buffer_size=1024)
-    dataset = dataset.repeat(-1 if is_training else 1)
+      dataset = dataset.shuffle(buffer_size=16*self.batch_size)
+    dataset = dataset.repeat(count=None)
     dataset = dataset.batch(self.batch_size, drop_remainder=True)
     # use decode function to retrieve images and labels
     # dataset = dataset.apply(
@@ -307,10 +306,7 @@ class BSDSDataProvider:
     #                                               batch_size=self.batch_size,
     #                                               num_parallel_batches=threads,
     #                                               drop_remainder=True))
-    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-    iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
-    self.images, self.labels = iterator.get_next()
-    self.dataset = dataset
+    self.dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
   def fetch_dataset(self, filename):
     """Fetch tf.data.Dataset from tfrecord filename."""

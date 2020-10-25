@@ -176,8 +176,7 @@ def get_input_fn_train(params):
                                    image_size=224,
                                    is_training=True,
                                    )
-    images, labels = dataset.images, dataset.labels
-    return images, labels
+    return dataset.dataset
   return num_examples, input_fn
 
 def get_input_fn_validation(params):
@@ -190,8 +189,7 @@ def get_input_fn_validation(params):
                                    image_size=224,
                                    is_training=False,
                                    )
-    images, labels = dataset.images, dataset.labels
-    return images, labels
+    return dataset.dataset
   return num_examples, input_fn
 
 

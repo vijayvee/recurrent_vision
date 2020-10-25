@@ -1,13 +1,13 @@
 #!/bin/bash
 export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba/src
 
-LEARNING_RATE=1e-5
+LEARNING_RATE=1e-4
 WEIGHT_DECAY=1e-4
 NUM_EPOCHS=10
-TRAIN_BATCH_SIZE=64
-EVAL_BATCH_SIZE=64
+TRAIN_BATCH_SIZE=32
+EVAL_BATCH_SIZE=32
 EVALUATE_EVERY=10
-EXPERIMENT_NAME="imagenet_vgg_ft_v1net_early"
+EXPERIMENT_NAME="imagenet_vgg_ft_v1net_batch32train_e2e"
 CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="momentum"
 USE_TPU=True
