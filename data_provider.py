@@ -253,11 +253,12 @@ class ImageNetDataProvider(object):
     dataset = dataset.batch(batch_size, drop_remainder=is_training)
 
     self.dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-    #iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
-    #self.images, self.labels, self.mask = iterator.get_next()
     self.num_classes = info.features["label"].num_classes + 1
     self.class_names = info.features["label"].names
     self.num_examples = info.splits[subset].num_examples
+    if not is_training:
+      iterator = tf.compat.v1.data.make_one_shot_iterator(dataset)
+      self.images, self.labels = iterator.get_next()
 
   def _preprocess_fn(self, is_training):
     return functools.partial(preprocess_imagenet, is_training=is_training,
@@ -300,12 +301,6 @@ class BSDSDataProvider:
       dataset = dataset.shuffle(buffer_size=16*self.batch_size)
     dataset = dataset.repeat(count=None)
     dataset = dataset.batch(self.batch_size, drop_remainder=True)
-    # use decode function to retrieve images and labels
-    # dataset = dataset.apply(
-    #            tf.data.experimental.map_and_batch(self.decode_feats,
-    #                                               batch_size=self.batch_size,
-    #                                               num_parallel_batches=threads,
-    #                                               drop_remainder=True))
     self.dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
   def fetch_dataset(self, filename):
