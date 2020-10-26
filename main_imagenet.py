@@ -23,6 +23,8 @@ flags.DEFINE_float("weight_decay", 1e-4,
                    "weight decay multiplier")
 flags.DEFINE_integer("num_epochs", 100,
                      "Number of training epochs")
+flags.DEFINE_integer("image_size", 224,
+                     "Image size for dataloading")
 flags.DEFINE_integer("train_batch_size", 1,
                      "Training minibatch size")
 flags.DEFINE_integer("eval_batch_size", 1,
@@ -69,7 +71,7 @@ def model_fn(features, labels, mode, params):
   if params["model_name"].startswith("vgg_16"):
     cfg = vgg_config(add_v1net_early=FLAGS.add_v1net_early)
     model = VGG(cfg)
-  elif params["model_name"].startwith("resnet_v2_50"):
+  elif params["model_name"].startswith("resnet_v2_50"):
     cfg = resnet_v2_config(add_v1net_early=FLAGS.add_v1net_early)
     model = ResNetV2(cfg)
   predictions, _ = model.build_model(images=features,
@@ -97,19 +99,36 @@ def model_fn(features, labels, mode, params):
   if training:
     global_step = tf.train.get_global_step()
     steps_per_epoch = params["num_train_steps_per_epoch"]
+    # Starting lr for fast minimum of lr*100, 1e-4
+    fast_start = min(FLAGS.learning_rate*100, 1e-4)
+    fast_learning_rate = build_learning_rate(fast_start,
+                                             global_step,
+                                             steps_per_epoch,
+                                             decay_factor=0.1,
+                                             decay_epochs=1)
     learning_rate = build_learning_rate(FLAGS.learning_rate,
                                         global_step,
                                         steps_per_epoch,
                                         decay_factor=0.1,
-                                        decay_epochs=5)
+                                        decay_epochs=1)
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
                               FLAGS.use_tpu)
+    slow_vars = [var for var in model.model_vars 
+                    if "v1net" not in var.name]
+    fast_vars = list(set(model.model_vars).difference(set(slow_vars)))
+    fast_optimizer = get_optimizer(fast_learning_rate,
+                                   FLAGS.optimizer,
+                                   FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    train_op = optimizer.minimize(loss, global_step)
-    train_op = tf.group([train_op, update_ops])
+
+    train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)
+    fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
+
+    train_op = tf.group([train_op, update_ops, fast_train_op])
     gs_t = tf.reshape(global_step, [1])
     lr_t = tf.reshape(learning_rate, [1])
+    fast_lr_t = tf.reshape(fast_learning_rate, [1])
     loss_t = tf.reshape(loss, [1])
     predicted_labels = tf.argmax(predictions, axis=1)
     _, top_1_acc = tf.metrics.accuracy(predictions=predicted_labels, 
@@ -122,7 +141,7 @@ def model_fn(features, labels, mode, params):
     top_1_acc = tf.reshape(top_1_acc, [1])
     top_5_acc = tf.reshape(top_5_acc, [1])
 
-    def host_call_fn(gs, lr, loss, top_1, top_5):
+    def host_call_fn(gs, lr, fast_lr, loss, top_1, top_5):
       """Training host call. Creates scalar summaries for training metrics.
       This function is executed on the CPU and should not directly reference
       any Tensors in the rest of the `model_fn`. To pass Tensors from the
@@ -144,13 +163,15 @@ def model_fn(features, labels, mode, params):
       with tf.compat.v2.summary.create_file_writer(params['model_dir'],
 						   max_queue=params['iterations_per_loop']).as_default():
         with tf.compat.v2.summary.record_if(True):
-          tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
-          tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
+          tf.compat.v2.summary.scalar('training/total_loss', loss[0], step=gs)
+          tf.compat.v2.summary.scalar('training/learning_rate', lr[0], step=gs)
+          tf.compat.v2.summary.scalar('training/fast_learning_rate', fast_lr[0], step=gs)
           tf.compat.v2.summary.scalar('training/top_1_accuracy',top_1[0], step=gs)
           tf.compat.v2.summary.scalar('training/top_5_accuracy',top_5[0], step=gs)
           return tf.summary.all_v2_summary_ops()
 
-    host_call_args = [gs_t, lr_t, loss_t, top_1_acc, top_5_acc]
+    host_call_args = [gs_t, lr_t, fast_lr_t, loss_t, 
+                      top_1_acc, top_5_acc]
     host_call = (host_call_fn, host_call_args)
 
   if mode == tf.estimator.ModeKeys.EVAL:
@@ -181,7 +202,7 @@ def get_input_fn_train(params):
     dataset = ImageNetDataProvider(batch_size=params["train_batch_size"],
                                    subset="train",
                                    data_dir=params["data_dir"],
-                                   image_size=224,
+                                   image_size=params["image_size"],
                                    is_training=True,
                                    )
     return dataset.dataset
@@ -194,7 +215,7 @@ def get_input_fn_validation(params):
     dataset = ImageNetDataProvider(batch_size=params["eval_batch_size"],
                                    subset="validation",
                                    data_dir=params["data_dir"],
-                                   image_size=224,
+                                   image_size=params["image_size"],
                                    is_training=False,
                                    )
     return dataset.dataset
@@ -227,7 +248,7 @@ def main(argv):
   tf.logging.info("Evaluating every %s steps"%(evaluate_every))
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start="^(?!.*side_output|.*Momentum|.*v1net)",
+                                        vars_to_warm_start=["^(?!.*side_output|.*Momentum|.*v1net|global_step)"],
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
