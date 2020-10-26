@@ -220,7 +220,7 @@ def stack_blocks_dense(net, blocks, output_stride=None,
 
 
 def resnet_arg_scope(
-    weight_decay=0.0001,
+    weight_decay=0,
     batch_norm_decay=0.997,
     batch_norm_epsilon=1e-5,
     batch_norm_scale=True,
@@ -236,6 +236,7 @@ def resnet_arg_scope(
 
   Args:
     weight_decay: The weight decay to use for regularizing the model.
+      vveeraba: Weight decay done by main script, not resnet utils.
     batch_norm_decay: The moving average decay when estimating layer activation
       statistics in batch normalization.
     batch_norm_epsilon: Small constant to prevent division by zero when
@@ -260,7 +261,6 @@ def resnet_arg_scope(
 
   with slim.arg_scope(
       [slim.conv2d],
-      weights_regularizer=slim.l2_regularizer(weight_decay),
       weights_initializer=slim.variance_scaling_initializer(),
       activation_fn=activation_fn,
       normalizer_fn=slim.batch_norm if use_batch_norm else None,
