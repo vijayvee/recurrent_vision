@@ -53,7 +53,6 @@ class V1NetCompact(rnn_cell_impl.RNNCell):
     self._use_bias = use_bias
     self.pointwise = pointwise
     self.activation = activation
-    print('Setting training to', training)
     self.training = training
     self.control = control
     self.initializers = initializers
