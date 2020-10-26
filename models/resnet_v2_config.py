@@ -8,7 +8,10 @@ mean_rgb = np.array([0.48501961,
 class ConfigDict(object):
   pass
 
-def resnet_v2_config(resnet_depth=50, add_v1net_early=False):
+def resnet_v2_config(resnet_depth=50, 
+                     add_v1net_early=False,
+                     compact=False,
+                     ):
   """Return configuration to build ResNet."""
   config = ConfigDict()
   config.image_size = (299, 299)
@@ -18,4 +21,5 @@ def resnet_v2_config(resnet_depth=50, add_v1net_early=False):
   config.mean_rgb = mean_rgb
   config.add_v1net = False
   config.add_v1net_early = add_v1net_early
+  config.compact = compact
   return config

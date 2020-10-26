@@ -3,6 +3,7 @@
 import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from recurrent_vision.utils.horizontal_cells.v1net_cell import V1Net_BN_cell
+from recurrent_vision.utils.horizontal_cells.v1net_compact_cell import V1NetCompact
 tf.disable_v2_behavior()
 
 def fuse_predictions(inputs, is_training=True):
@@ -94,7 +95,8 @@ def build_avgpool(inputs):
 def build_v1net(inputs, timesteps,
                 filters, kernel_size,
                 is_training=True, inh_mult=1.5,
-                exc_mult=3, v1_act='relu'):
+                exc_mult=3, v1_act='relu',
+                compact=False):
   """Build V1Net layer.
   Args:
     inputs: Input tensor (n,h,w,c)
@@ -123,16 +125,20 @@ def build_v1net(inputs, timesteps,
                      name='init_h')
   state = tf.nn.rnn_cell.LSTMStateTuple(state_c, 
                                         state_h)
-  v1net_cell = V1Net_BN_cell(input_shape=[h, w, c],
-                             output_channels=filters,
-                             kernel_shape=[kernel_size, 
-                                           kernel_size],
-                             inh_mult=inh_mult,
-                             exc_mult=exc_mult,
-                             activation=v1_act,
-                             timesteps=timesteps,
-                             training=is_training,
-                             )
+  if compact:
+    cell = V1NetCompact
+  else:
+    cell = V1Net_BN_cell
+  v1net_cell = cell(input_shape=[h, w, c],
+                    output_channels=filters,
+                    kernel_shape=[kernel_size, 
+                                  kernel_size],
+                    inh_mult=inh_mult,
+                    exc_mult=exc_mult,
+                    activation=v1_act,
+                    timesteps=timesteps,
+                    training=is_training,
+                    )
   v1net_out = tf.nn.dynamic_rnn(cell=v1net_cell,
                                 inputs=v1net_input,
                                 initial_state=state,

@@ -47,6 +47,7 @@ class ResNetV2(ModelBuilder):
                                 is_training=is_training,
                                 add_v1net=model_config.add_v1net,
                                 add_v1net_early=model_config.add_v1net_early,
+                                compact=model_config.compact,
                                 )
     model_vars = [var for var in tf.global_variables()]
     self.model_vars = set(model_vars).difference(set(all_vars))

@@ -106,6 +106,7 @@ def resnet_v2(inputs,
               spatial_squeeze=True,
               add_v1net=False,
               add_v1net_early=False,
+              compact=False,
               reuse=None,
               scope=None):
   """Generator for v2 (preactivation) ResNet models.
@@ -188,7 +189,8 @@ def resnet_v2(inputs,
               v1_timesteps, v1_kernel_size, n_filters = 4, 3, 32
               net = build_v1net(inputs=net, filters=n_filters,
                                 timesteps=v1_timesteps,
-                                kernel_size=v1_kernel_size)
+                                kernel_size=v1_kernel_size,
+                                compact=compact)
               net = slim.conv2d(net, 64, [1,1])
           net = slim.max_pool2d(net, [3, 3], stride=2, scope='pool1')
         net = resnet_utils.stack_blocks_dense(net, blocks, output_stride)
@@ -248,6 +250,7 @@ def resnet_v2_50(inputs,
                  spatial_squeeze=True,
                  add_v1net=False,
                  add_v1net_early=False,
+                 compact=False,
                  reuse=None,
                  scope='resnet_v2_50'):
   """ResNet-50 model of [1]. See resnet_v2() for arg and return description."""
@@ -260,7 +263,7 @@ def resnet_v2_50(inputs,
   return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
                    global_pool=global_pool, output_stride=output_stride,
                    include_root_block=True, spatial_squeeze=spatial_squeeze,
-                   add_v1net=add_v1net, add_v1net_early=add_v1net_early, 
+                   add_v1net=add_v1net, add_v1net_early=add_v1net_early, compact=compact,
                    reuse=reuse, scope=scope)
 resnet_v2_50.default_image_size = resnet_v2.default_image_size
 
