@@ -1,6 +1,5 @@
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from tensorflow.python.framework import tensor_shape  # pylint: disable=import-error
-from tensorflow.python.ops import init_ops  # pylint: disable=import-error
 from tensorflow.python.ops import rnn_cell_impl  # pylint: disable=import-error
 from tensorflow.python.ops import variable_scope as vs  # pylint: disable=import-error
 
@@ -171,18 +170,9 @@ def _separable_conv(args, filter_size, output_channels, bias,
   Raises:
     ValueError: if some of the arguments has unspecified or wrong shape.
   """
-  # Calculate the total size of arguments on dimension 1.
-  shapes = [a.get_shape().as_list() for a in args]
-  shape_length = len(shapes[0])
-
   input, hidden = args
-  h_arg_depth = shapes[1][-1]
   x_h = tf.concat([input, hidden], axis=-1)
-  xh_arg_depth = x_h.shape.as_list()[-1]
-
-  separable_conv_op = tf.nn.separable_conv2d
-  strides = shape_length * [1]
-
+  conv2d_layer = tf.layers.separable_conv2d
   if pointwise:
     filter_size = [1, 1]
     print('Pointwise gates added')
@@ -193,86 +183,32 @@ def _separable_conv(args, filter_size, output_channels, bias,
   filter_size_inh = [f_h_inh, f_w_inh]
   filter_size_exc = [f_h_exc, f_w_exc]
 
-  # Build input and hidden kernels
-  xh_kernel = vs.get_variable(
-    "input_hidden_kernel", filter_size + [xh_arg_depth, channel_multiplier],
-    initializer=get_initializer(dtype),
-    dtype=dtype)
-
-  xh_kernel_ps = vs.get_variable(
-    "input_hidden_kernel_ps", [1, 1, channel_multiplier * xh_arg_depth, output_channels * 2],
-    initializer=get_initializer(dtype),
-    dtype=dtype)
-
-  h_kernel_shunt = vs.get_variable(
-    "hidden_kernel_shunt", filter_size_inh + [h_arg_depth, channel_multiplier],
-    initializer=get_initializer(dtype),
-    dtype=dtype)
-
-  h_kernel_shunt_ps = vs.get_variable(
-    "hidden_kernel_shunt_ps", [1, 1, h_arg_depth * channel_multiplier, output_channels],
-    initializer=get_initializer(dtype),
-    dtype=dtype)
-
-  h_kernel_exc = vs.get_variable(
-    "hidden_kernel_exc", filter_size_exc + [h_arg_depth, channel_multiplier],
-    initializer=get_initializer(dtype),
-    dtype=dtype)
-
-  h_kernel_exc_ps = vs.get_variable(
-    "hidden_kernel_exc_ps", [1, 1, h_arg_depth * channel_multiplier, output_channels],
-    initializer=get_initializer(dtype),
-    dtype=dtype)
-
-  res_xh = separable_conv_op(x_h,
-                             xh_kernel,
-                             xh_kernel_ps,
-                             strides,
-                             padding="SAME")
-
-  res_h_exc = separable_conv_op(hidden,
-                                h_kernel_exc,
-                                h_kernel_exc_ps,
-                                strides,
-                                padding="SAME")
-
-  res_h_shunt = separable_conv_op(hidden,
-                                  h_kernel_shunt,
-                                  h_kernel_shunt_ps,
-                                  strides,
-                                  padding="SAME")
-
-  bias_xh = vs.get_variable(
-    "biases_input_hidden", [output_channels * 2],
-    dtype=dtype, initializer=init_ops.constant_initializer(
-                                        bias_start,
-                                        dtype=dtype))
-  
-  bias_hidden_exc = vs.get_variable(
-    "biases_hidden_exc", [output_channels],
-    dtype=dtype, initializer=init_ops.constant_initializer(
-                                        bias_start,
-                                        dtype=dtype))
-
-  bias_hidden_shunt = vs.get_variable(
-    "biases_hidden_shunt", [output_channels],
-    dtype=dtype, initializer=init_ops.constant_initializer(
-                                        bias_start,
-                                        dtype=dtype))
-
-  res_input_hidden = tf.math.add(res_xh,
-                          bias_xh,
-                          name='conv_input_hidden'
+  with tf.variable_scope("recurrent-convolution", 
+                         reuse=tf.AUTO_REUSE):
+    res_input_hidden = conv2d_layer(inputs=x_h,
+                          filters=output_channels*2, 
+                          kernel_size=filter_size, 
+                          padding='same',
+                          use_bias=True,
+                          depthwise_initializer=get_initializer(dtype),
+                          pointwise_initializer=get_initializer(dtype),
                           )
 
-  res_hidden_exc = tf.math.add(res_h_exc,
-                               bias_hidden_exc,
-                               name='conv_hidden_exc'
+    res_hidden_exc = conv2d_layer(inputs=hidden,
+                             filters=output_channels, 
+                             kernel_size=filter_size_exc, 
+                             padding='same',
+                             use_bias=True,
+                             depthwise_initializer=get_initializer(dtype),
+                             pointwise_initializer=get_initializer(dtype),
+                             )
+
+    res_hidden_shunt = conv2d_layer(inputs=hidden,
+                               filters=output_channels, 
+                               kernel_size=filter_size_inh, 
+                               padding='same',
+                               use_bias=True,
+                               depthwise_initializer=get_initializer(dtype),
+                               pointwise_initializer=get_initializer(dtype),
                                )
-
-  res_hidden_shunt = tf.math.add(res_h_shunt,
-                                bias_hidden_shunt,
-                                name='conv_hidden_shunt'
-                                )
-
   return (res_input_hidden, res_hidden_exc, res_hidden_shunt)
