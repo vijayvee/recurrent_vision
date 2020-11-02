@@ -152,7 +152,7 @@ def get_initializer(dtype=tf.float32):
 
 
 def _separable_conv(args, filter_size, output_channels, bias,
-                    inh_mult=1.5, exc_mult=3, bias_start=0.0,
+                    inh_mult=1.5, exc_mult=2, bias_start=0.0,
                     activation=None, initializers=None, 
                     pointwise=False, channel_multiplier=1,
                     dtype=tf.float32):
