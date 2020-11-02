@@ -389,16 +389,16 @@ def vgg_16_hed(inputs,
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+      side_outputs.append(net)
+      net = slim.max_pool2d(net, [2,2], scope='pool1')
       if add_v1net_early:
         with tf.variable_scope("v1net-conv1"):
-          net = slim.conv2d(net, 32, [1,1])
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 32
+          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
-          net = slim.conv2d(net, 64, [1,1])
-      side_outputs.append(net)
-      net = slim.max_pool2d(net, [2, 2], scope='pool1')
+      # side_outputs.append(net)
+      # net = slim.max_pool2d(net, [2, 2], scope='pool1')
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
       side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
