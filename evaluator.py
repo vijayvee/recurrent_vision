@@ -109,6 +109,7 @@ class Evaluator:
     dataset = ImageNetDataProvider(batch_size=64,
                                    subset="validation",
                                    data_dir=FLAGS.in_dir,
+                                   is_training=False,
                                    )
     images, labels = dataset.images, dataset.labels
     num_val_examples = dataset.num_examples
