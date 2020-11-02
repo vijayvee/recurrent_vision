@@ -27,7 +27,7 @@ flags.DEFINE_integer("eval_batch_size", 1,
                      "Evaluation minibatch size")
 flags.DEFINE_integer("num_cores", 8,
                      "Number of TPU cores")
-flags.DEFINE_integer("iterations_per_loop", 1000,
+flags.DEFINE_integer("iterations_per_loop", 500,
                      "Number of iterations per TPU loop")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
@@ -106,23 +106,40 @@ def model_fn(features, labels, mode, params):
                                         steps_per_epoch,
                                         decay_factor=0.1,
                                         decay_epochs=25)
+    fast_start = min(FLAGS.learning_rate*100, 1e-4)
+    fast_learning_rate = build_learning_rate(fast_start,
+                                             global_step,
+                                             steps_per_epoch,
+                                             decay_factor=0.1,
+                                             decay_epochs=10)
+
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
                               FLAGS.use_tpu)
+    slow_vars = [var for var in vgg.model_vars 
+                    if "v1net" not in var.name]
+    fast_vars = list(set(vgg.model_vars).difference(set(slow_vars)))
+    fast_optimizer = get_optimizer(fast_learning_rate,
+                                   FLAGS.optimizer,
+                                   FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    train_op = optimizer.minimize(loss, global_step)
-    train_op = tf.group([train_op, update_ops])
+
+    train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)
+    fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
+
+    train_op = tf.group([train_op, update_ops, fast_train_op])
+
     gs_t = tf.reshape(global_step, [1])
     lr_t = tf.reshape(learning_rate, [1])
+    fast_lr_t = tf.reshape(fast_learning_rate, [1])
     loss_t = tf.reshape(loss, [1])
     loss_side_t = tf.reshape(loss_side, [1])
     loss_fuse_t = tf.reshape(loss_fuse, [1])
-    img_t = features["image"]
     labels_t = labels["label"]
     preds_t = tf.nn.sigmoid(predictions)
 
-    def host_call_fn(gs, lr, loss, loss_side, loss_fuse, 
-	             img, lbls, preds):
+    def host_call_fn(gs, lr, fast_lr, loss, loss_side, loss_fuse, 
+	             lbls, preds):
       """Training host call. Creates scalar summaries for training metrics.
       This function is executed on the CPU and should not directly reference
       any Tensors in the rest of the `model_fn`. To pass Tensors from the
@@ -149,13 +166,13 @@ def model_fn(features, labels, mode, params):
           tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
           tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
           tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
-          #tf.compat.v2.summary.image('training/images',img,step=gs)
+          tf.compat.v2.summary.scalar('training/fast_learning_rate',fast_lr[0], step=gs)
           tf.compat.v2.summary.image('training/predictions',1-preds,step=gs)
           tf.compat.v2.summary.image('training/labels',lbls,step=gs)
           return tf.summary.all_v2_summary_ops()
 
-    host_call_args = [gs_t, lr_t, loss_t, loss_side_t, 
-                      loss_fuse_t, img_t, labels_t, preds_t]
+    host_call_args = [gs_t, lr_t, fast_lr_t, loss_t, loss_side_t, 
+                      loss_fuse_t, labels_t, preds_t]
     host_call = (host_call_fn, host_call_args)
 
   if mode == tf.estimator.ModeKeys.EVAL:
@@ -239,7 +256,7 @@ def main(argv):
   
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start=["^(?!.*side_output|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
+                                        vars_to_warm_start=["^(?!.*side_output|.*v1net|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
