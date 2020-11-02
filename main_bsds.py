@@ -75,11 +75,6 @@ def model_fn(features, labels, mode, params):
 
   # output predictions
   if mode == tf.estimator.ModeKeys.PREDICT:
-    # TODO(vveerabadran): implement aggregate predictions (from fusion)
-    predictions = tf.reduce_mean(tf.stack([predictions,
-                                           side_predictions],
-                                           axis=0),
-                                           axis=0,)
     sigmoid = tf.nn.sigmoid(predictions)
     predictions = {
         "predictions": predictions,
@@ -97,9 +92,11 @@ def model_fn(features, labels, mode, params):
                                      labels=side_labels,
                                      pos_weight=pos_weight),
                                      )
+  new_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 
+                               "(.*side_output|.*v1net)")
   loss = loss_side + loss_fuse + FLAGS.weight_decay * tf.add_n(
-                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
-                           if 'batch_normalization' not in v.name])
+                [tf.nn.l2_loss(v) for v in new_vars
+                           if 'normalization' not in v.name])
   
   if training:
     global_step = tf.train.get_global_step()
@@ -108,7 +105,7 @@ def model_fn(features, labels, mode, params):
                                         global_step,
                                         steps_per_epoch,
                                         decay_factor=0.1,
-                                        decay_epochs=50)
+                                        decay_epochs=25)
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
                               FLAGS.use_tpu)
@@ -122,7 +119,7 @@ def model_fn(features, labels, mode, params):
     loss_fuse_t = tf.reshape(loss_fuse, [1])
     img_t = features["image"]
     labels_t = labels["label"]
-    preds_t = tf.nn.sigmoid(endpoints["test_outputs"])
+    preds_t = tf.nn.sigmoid(predictions)
 
     def host_call_fn(gs, lr, loss, loss_side, loss_fuse, 
 	             img, lbls, preds):
@@ -145,15 +142,16 @@ def model_fn(features, labels, mode, params):
       """
       gs = gs[0]
       with tf.compat.v2.summary.create_file_writer(params['model_dir'],
-						   max_queue=100).as_default():
+						   max_queue=params['iterations_per_loop']
+                                                   ).as_default():
         with tf.compat.v2.summary.record_if(True):
           tf.compat.v2.summary.scalar('training/total_loss',loss[0], step=gs)
           tf.compat.v2.summary.scalar('training/side_loss',loss_side[0], step=gs)
           tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
           tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
-          tf.compat.v2.summary.image('training/images',img,step=gs)
+          #tf.compat.v2.summary.image('training/images',img,step=gs)
           tf.compat.v2.summary.image('training/predictions',1-preds,step=gs)
-          tf.compat.v2.summary.image('training/labels',1-lbls,step=gs)
+          tf.compat.v2.summary.image('training/labels',lbls,step=gs)
           return tf.summary.all_v2_summary_ops()
 
     host_call_args = [gs_t, lr_t, loss_t, loss_side_t, 
@@ -241,7 +239,7 @@ def main(argv):
   
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start="^(?!.*side_output|.*Momentum|.*v1net)",
+                                        vars_to_warm_start=["^(?!.*side_output|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
