@@ -447,16 +447,9 @@ def vgg_16_hed(inputs,
       else:
         fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
       end_points['fused_predictions'] = fused_predictions
-      test_predictions = tf.reduce_mean(
-                              tf.concat([side_outputs_fullres,
-                                        tf.expand_dims(fused_predictions, 0),
-                                        ],
-                                   axis=0),
-                                   axis=0)
       side_outputs_fullres = tf.reshape(side_outputs_fullres,
                                         (-1, h, w, 1))
       end_points['side_outputs_fullres'] = side_outputs_fullres
-      end_points['test_outputs'] = test_predictions
       return fused_predictions, end_points
 
 

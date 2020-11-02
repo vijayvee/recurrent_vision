@@ -183,16 +183,18 @@ def resnet_v2(inputs,
           with slim.arg_scope([slim.conv2d],
                               activation_fn=None, normalizer_fn=None):
             net = resnet_utils.conv2d_same(net, 64, 7, stride=2, scope='conv1')
+            net = slim.max_pool2d(net, [3, 3], stride=2, scope='pool1')
           if add_v1net_early:
             with tf.variable_scope("v1net-conv1"):
-              net = slim.conv2d(net, 32, [1,1])
-              v1_timesteps, v1_kernel_size, n_filters = 4, 3, 32
+              # net = slim.conv2d(net, 32, [1,1])
+              # v1_timesteps, v1_kernel_size, n_filters = 4, 3, 32
+              v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
               net = build_v1net(inputs=net, filters=n_filters,
                                 timesteps=v1_timesteps,
                                 kernel_size=v1_kernel_size,
                                 compact=compact)
-              net = slim.conv2d(net, 64, [1,1])
-          net = slim.max_pool2d(net, [3, 3], stride=2, scope='pool1')
+              # net = slim.conv2d(net, 64, [1,1])
+          # net = slim.max_pool2d(net, [3, 3], stride=2, scope='pool1')
         net = resnet_utils.stack_blocks_dense(net, blocks, output_stride)
         # This is needed because the pre-activation variant does not have batch
         # normalization or activation functions in the residual unit output. See
