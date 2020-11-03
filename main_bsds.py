@@ -35,6 +35,8 @@ flags.DEFINE_string("checkpoint", "",
                     "Checkpoint filename")
 flags.DEFINE_string("optimizer", "",
                     "Optimizer algorithm (Adam, SGD, etc.)")
+flags.DEFINE_string("base_dir", "bsds_experiments",
+                    "Base directory to store experiments on GCS")
 flags.DEFINE_boolean("use_tpu", True,
                      "Whether to use TPU for training")
 flags.DEFINE_boolean("evaluate", False,
@@ -148,13 +150,13 @@ def model_fn(features, labels, mode, params):
       Arguments should match the list of `Tensor` objects passed as the second
       element in the tuple passed to `host_call`.
       Args:
-	gs: `Tensor with shape `[batch]` for the global_step
-	loss: `Tensor` with shape `[batch]` for the training loss.
-	loss_side: `Tensor` with shape `[batch]` for the training side loss.
-	loss_fuse: `Tensor` with shape `[batch]` for the training fused loss.
-	img: `Tensor` of input images.
+        gs: `Tensor with shape `[batch]` for the global_step
+        loss: `Tensor` with shape `[batch]` for the training loss.
+        loss_side: `Tensor` with shape `[batch]` for the training side loss.
+        loss_fuse: `Tensor` with shape `[batch]` for the training fused loss.
+        img: `Tensor` of input images.
       Returns:
-	List of summary ops to run on the CPU host.
+        List of summary ops to run on the CPU host.
       """
       gs = gs[0]
       with tf.compat.v2.summary.create_file_writer(params['model_dir'],
@@ -232,12 +234,16 @@ def get_scaffold_fn():
 def main(argv):
   del argv  # unused here
   gcs_root = "gs://v1net-tpu-bucket/"
-  gcs_path = "gs://v1net-tpu-bucket/bsds_experiments/"
   args = FLAGS.flag_values_dict()
+  gcs_path = "gs://v1net-tpu-bucket/%s/" % args["base_dir"]
   model_dir = os.path.join(gcs_path, "model_dir_%s" % args["experiment_name"])
+  summaries_dir = os.path.join(gcs_path, "summaries")
   if not tf.gfile.Exists(model_dir):
     tf.gfile.MakeDirs(model_dir)
+  if not tf.gfile.Exists(model_dir):
+    tf.gfile.MakeDirs(summaries_dir)
   args["model_dir"] = model_dir
+  args["summaries_dir"] = summaries_dir
 
   rand_seed = np.random.randint(10000)
   tf.set_random_seed(rand_seed)
