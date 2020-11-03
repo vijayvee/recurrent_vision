@@ -29,6 +29,8 @@ flags.DEFINE_integer("num_cores", 8,
                      "Number of TPU cores")
 flags.DEFINE_integer("iterations_per_loop", 500,
                      "Number of iterations per TPU loop")
+flags.DEFINE_integer("image_size", 400,
+                     "Input image size")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
 flags.DEFINE_string("checkpoint", "",
@@ -198,7 +200,9 @@ def get_input_fn_train(params):
   def input_fn(params):
     dataset = BSDSDataProvider(params["train_batch_size"],
                                is_training=True,
-                               data_dir=params["data_dir"])
+                               data_dir=params["data_dir"],
+                               image_size=(FLAGS.image_size,
+                                           FLAGS.image_size))
     return dataset.dataset
   return num_examples, input_fn
 
