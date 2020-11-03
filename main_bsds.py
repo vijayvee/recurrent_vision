@@ -82,6 +82,7 @@ def model_fn(features, labels, mode, params):
     }
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
+  # TODO(vveeraba): Change positive class weight below
   pos_weight = 1.1
   loss_fn = tf.nn.weighted_cross_entropy_with_logits
   xent = tf.nn.sigmoid_cross_entropy_with_logits
@@ -92,10 +93,8 @@ def model_fn(features, labels, mode, params):
                                      labels=side_labels,
                                      pos_weight=pos_weight),
                                      )
-  new_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 
-                               "(.*side_output|.*v1net)")
   loss = loss_side + loss_fuse + FLAGS.weight_decay * tf.add_n(
-                [tf.nn.l2_loss(v) for v in new_vars
+                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
                            if 'normalization' not in v.name])
   
   if training:
