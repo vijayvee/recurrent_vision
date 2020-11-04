@@ -1,16 +1,20 @@
 """Evaluation on ImageNet classification."""
-from absl import app
-from absl import flags
-
 import os
-import numpy as np  
+
+import cv2  # pylint: disable=import-error
+import numpy as np
+import skimage.io as io  # pylint: disable=import-error
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
+from tqdm import tqdm
+from absl import app, flags
+from PIL import Image
 
 from recurrent_vision.data_provider import ImageNetDataProvider
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
-from recurrent_vision.models.vgg_v1net_config import vgg_v1net_config
 from recurrent_vision.models.vgg_config import vgg_config
 from recurrent_vision.models.vgg_model import VGG
+from recurrent_vision.models.vgg_v1net_config import vgg_v1net_config
+
 tf.disable_v2_behavior()
 
 FLAGS = flags.FLAGS
@@ -25,19 +29,22 @@ flags.DEFINE_string("checkpoint_dir", "",
                     "Directory where checkpoints are stored")
 flags.DEFINE_boolean("preprocess", False,
                      "Whether to add imagenet mean subtraction")
-
+flags.DEFINE_boolean("add_v1net_early", False,
+                     "Whether to add V1Net")
 
 def load_image(image_path):
   """Load images from disk."""
   img = np.array(Image.open(image_path))
+  transpose = False
   if img.max() > 1.:
     img = img / 255.
   if img.shape[-1] == 1:
     img = np.repeat(img, 3, axis=-1)
   if img.shape[0] == 481:
     img = np.transpose(img, (1, 0, 2))
+    transpose = True
   img = np.expand_dims(img, axis=0)
-  return img
+  return img, transpose
 
 
 def save_image(image, prefix=None,
@@ -50,12 +57,12 @@ def save_image(image, prefix=None,
     filename = "%s.png" % prefix.split('.')[0]
   filename = os.path.join(path, filename)
   if image.shape[0] == 1:
-    # Save only one image
+    # Saves only one image
     image = image[0]
-  # if image.shape[-1] == 1:
-  #   image = image[:,:,0]
-  # io.imsave(filename, image)
-  cv2.imwrite(filename, image)
+  if image.shape[-1] == 1:
+    image = image[:,:,0]
+  image = np.uint8(image*255.)
+  io.imsave(filename, image)
   return filename
 
 
@@ -71,14 +78,14 @@ class Evaluator:
     """Build imagenet classification model."""
     model_config = None
     if self.model_name.startswith("vgg_16_hed"):
-      model_config = vgg_16_hed_config()
+      model_config = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early)
     elif self.model_name.startswith("vgg_19"):
       model_config = vgg_config(vgg_depth=19)
     elif self.model_name.startswith("vgg_16"):
       model_config = vgg_config()
     self.model = VGG(model_config)
-    predictions, endpoints = self.model.build_model(images, is_training=False,
-                                                    preprocess=FLAGS.preprocess)
+    predictions, _ = self.model.build_model(images, is_training=False,
+                                            preprocess=FLAGS.preprocess)
     return predictions
 
   def evaluate(self):
@@ -98,9 +105,13 @@ class Evaluator:
 
       # Generate predictions
       for img_fn in tqdm(img_fns):
-        img = load_image(os.path.join(in_dir, img_fn))
+        img, transpose = load_image(os.path.join(in_dir, img_fn))
         model_pred = sess.run(predictions, 
                               feed_dict={images: img})
+        if transpose:
+          model_pred = np.transpose(model_pred, 
+                                    (0, 2, 1, 3))
+          print(model_pred.shape)
         save_image(model_pred, prefix=img_fn, 
                    path=out_dir)
   
@@ -148,7 +159,7 @@ class Evaluator:
 def main(argv):
   del argv  # unused here
   evaluator = Evaluator()
-  evaluator.evaluate_ilsvrc()
+  evaluator.evaluate()
 
 
 if __name__=="__main__":
