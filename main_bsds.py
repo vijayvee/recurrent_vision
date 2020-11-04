@@ -45,6 +45,8 @@ flags.DEFINE_boolean("evaluate", False,
                      "Whether to evaluate during training")
 flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add v1net after first conv block")
+flags.DEFINE_boolean("add_v1net", False,
+                     "Whether to add v1net throughout")
 flags.DEFINE_string("tpu_name", "",
                     "Name of TPU to use")
 flags.DEFINE_string("tpu_zone", "europe-west4-a",
@@ -67,7 +69,8 @@ def model_fn(features, labels, mode, params):
   eval_metrics, train_op, loss = None, None, None
   host_call = None
   training = mode == tf.estimator.ModeKeys.TRAIN
-  cfg = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early)
+  cfg = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early,
+                          add_v1net=FLAGS.add_v1net)
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
                                            is_training=training,
