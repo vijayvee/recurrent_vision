@@ -399,35 +399,45 @@ def vgg_16_hed(inputs,
                             kernel_size=v1_kernel_size)
           side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
+
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
-      side_outputs.append(net)
-      net = slim.max_pool2d(net, [2, 2], scope='pool2')
       if add_v1net:
         with tf.variable_scope("v1net-conv2"):
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
+          side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool2')
+      
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
-      side_outputs.append(net)
-      net = slim.max_pool2d(net, [2, 2], scope='pool3')
       if add_v1net:
         with tf.variable_scope("v1net-conv3"):
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
+          side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool3')
+      
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
-      side_outputs.append(net)
+      if add_v1net:
+        with tf.variable_scope("v1net-conv4"):
+          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          net = build_v1net(inputs=net, filters=n_filters, 
+                           timesteps=v1_timesteps, 
+                           kernel_size=v1_kernel_size)
+          side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
-      #if add_v1net:
-      #  with tf.variable_scope("v1net-conv4"):
-      #    v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
-      #    net = build_v1net(inputs=net, filters=n_filters, 
-      #                      timesteps=v1_timesteps, 
-      #                      kernel_size=v1_kernel_size)
+      
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
-      side_outputs.append(net)
+      if add_v1net:
+        with tf.variable_scope("v1net-conv5"):
+          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          net = build_v1net(inputs=net, filters=n_filters, 
+                           timesteps=v1_timesteps, 
+                           kernel_size=v1_kernel_size)
+          side_outputs.append(net)
       end_points = slim.utils.convert_collection_to_dict(end_points_collection)
       side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
                               for side_output in side_outputs]

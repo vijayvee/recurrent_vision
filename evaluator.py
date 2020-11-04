@@ -31,6 +31,8 @@ flags.DEFINE_boolean("preprocess", False,
                      "Whether to add imagenet mean subtraction")
 flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add V1Net")
+flags.DEFINE_boolean("add_v1net", False,
+                     "Whether to add V1Net throughout")
 
 def load_image(image_path):
   """Load images from disk."""
@@ -78,7 +80,8 @@ class Evaluator:
     """Build imagenet classification model."""
     model_config = None
     if self.model_name.startswith("vgg_16_hed"):
-      model_config = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early)
+      model_config = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early,
+                                       add_v1net=FLAGS.add_v1net)
     elif self.model_name.startswith("vgg_19"):
       model_config = vgg_config(vgg_depth=19)
     elif self.model_name.startswith("vgg_16"):
