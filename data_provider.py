@@ -282,8 +282,9 @@ class BSDSDataProvider:
     # load tfrecord files
     if is_training:
       self.training = True
-      glob_pattern = "%s/train*" % data_dir
-      self.num_examples = 19200
+      tf.logging.info("Training on full set (train, val)")
+      glob_pattern = "%s/*" % data_dir
+      self.num_examples = 19200 + 9600
     else:
       self.training=False
       glob_pattern = "%s/validation*" % data_dir
@@ -298,7 +299,9 @@ class BSDSDataProvider:
                           num_parallel_calls=threads)
     if is_training:
       # shuffling dataset
-      dataset = dataset.shuffle(buffer_size=16*self.batch_size)
+      shuffle_buffer = min(16*self.batch_size, 256)
+      tf.logging.info("Shuffle buffer set to %s" % shuffle_buffer)
+      dataset = dataset.shuffle(buffer_size=shuffle_buffer)
     dataset = dataset.repeat(count=None)
     dataset = dataset.batch(self.batch_size, drop_remainder=True)
     self.dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
