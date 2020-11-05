@@ -19,7 +19,7 @@ flags.DEFINE_float("learning_rate", 0.0,
                    "Optimizer learning rate")
 flags.DEFINE_float("weight_decay", 1e-4,
                    "weight decay multiplier")
-flags.DEFINE_float("evaluate_every", 10.,
+flags.DEFINE_float("evaluate_every", 0.01,
                    "Evaluation frequency in epochs")
 flags.DEFINE_integer("num_epochs", 100,
                      "Number of training epochs")
@@ -29,7 +29,7 @@ flags.DEFINE_integer("eval_batch_size", 1,
                      "Evaluation minibatch size")
 flags.DEFINE_integer("num_cores", 8,
                      "Number of TPU cores")
-flags.DEFINE_integer("iterations_per_loop", 500,
+flags.DEFINE_integer("iterations_per_loop", 1200,
                      "Number of iterations per TPU loop")
 flags.DEFINE_integer("image_size", 400,
                      "Input image size")
@@ -49,6 +49,8 @@ flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add v1net after first conv block")
 flags.DEFINE_boolean("add_v1net", False,
                      "Whether to add v1net throughout")
+flags.DEFINE_boolean("preprocess", False,
+                     "Whether to add preprocessing")
 flags.DEFINE_string("tpu_name", "",
                     "Name of TPU to use")
 flags.DEFINE_string("tpu_zone", "europe-west4-a",
@@ -76,7 +78,7 @@ def model_fn(features, labels, mode, params):
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
                                            is_training=training,
-                                           preprocess=False)
+                                           preprocess=FLAGS.preprocess)
   # TODO(vveeraba): Add vgg restore checkpoint
   # Tile ground truth for 5 side outputs
   side_predictions = endpoints["side_outputs_fullres"]
@@ -190,10 +192,13 @@ def model_fn(features, labels, mode, params):
       xentropy = tf.reduce_mean(xent(logits=logits,
                                   labels=labels,
                                   ))
+      rmse = tf.metrics.root_mean_squared_error(labels=labels,
+                                                predictions=logits)
       return {
               'xentropy': xentropy,
+              'rmse': rmse,
               }
-    eval_metrics = (metric_fn, [label_tensor, predictions])
+      eval_metrics = (metric_fn, [labels["label"], predictions])
     
   return tf.estimator.tpu.TPUEstimatorSpec(train_op=train_op,
                                            mode=mode, loss=loss, 
@@ -271,10 +276,9 @@ def main(argv):
   args["num_train_steps_per_epoch"] = num_train_steps_per_epoch
 
   args["num_val_examples"] = num_val_examples
-  args["num_val_steps"] = args["num_val_examples"] // args["val_batch_size"]
+  args["num_val_steps"] = args["num_val_examples"] // args["eval_batch_size"]
   num_val_steps = args["num_val_steps"]
-
-  eval_every = args["eval_every"] * num_train_steps_per_epoch
+  eval_every = int(args["evaluate_every"] * num_train_steps_per_epoch)
   
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
@@ -301,6 +305,7 @@ def main(argv):
                 params=args,
                 warm_start_from=warm_start_settings,
                 train_batch_size=args["train_batch_size"],
+                eval_batch_size=args["eval_batch_size"],
                 )
 
   start_timestamp = time.time()
