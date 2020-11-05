@@ -404,7 +404,8 @@ def vgg_16_hed(inputs,
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
-                            kernel_size=v1_kernel_size)
+                            kernel_size=v1_kernel_size,
+                            is_training=is_training)
           side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
 
@@ -414,8 +415,9 @@ def vgg_16_hed(inputs,
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
-                            kernel_size=v1_kernel_size)
-          side_outputs.append(net)
+                            kernel_size=v1_kernel_size,
+                            is_training=is_training)
+      side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
       
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
@@ -424,8 +426,9 @@ def vgg_16_hed(inputs,
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
-                            kernel_size=v1_kernel_size)
-          side_outputs.append(net)
+                            kernel_size=v1_kernel_size,
+                            is_training=is_training)
+      side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool3')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
@@ -434,8 +437,9 @@ def vgg_16_hed(inputs,
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                            timesteps=v1_timesteps, 
-                           kernel_size=v1_kernel_size)
-          side_outputs.append(net)
+                           kernel_size=v1_kernel_size,
+                           is_training=is_training)
+      side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
@@ -444,8 +448,9 @@ def vgg_16_hed(inputs,
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                            timesteps=v1_timesteps, 
-                           kernel_size=v1_kernel_size)
-          side_outputs.append(net)
+                           kernel_size=v1_kernel_size,
+                           is_training=is_training)
+      side_outputs.append(net)
       end_points = slim.utils.convert_collection_to_dict(end_points_collection)
       side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
                               for side_output in side_outputs]
