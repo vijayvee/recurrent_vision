@@ -47,6 +47,8 @@ flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add v1net after first conv block")
 flags.DEFINE_boolean("add_v1net", False,
                      "Whether to add v1net throughout")
+flags.DEFINE_boolean("preprocess", False,
+                     "Whether to add ImageNet preprocessing")
 flags.DEFINE_string("tpu_name", "",
                     "Name of TPU to use")
 flags.DEFINE_string("tpu_zone", "europe-west4-a",
@@ -74,7 +76,7 @@ def model_fn(features, labels, mode, params):
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
                                            is_training=training,
-                                           preprocess=False)
+                                           preprocess=FLAGS.preprocess)
   # TODO(vveeraba): Add vgg restore checkpoint
   # Tile ground truth for 5 side outputs
   side_predictions = endpoints["side_outputs_fullres"]
