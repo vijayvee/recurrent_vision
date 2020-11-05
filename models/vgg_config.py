@@ -14,7 +14,9 @@ stddev_rgb_vgg = np.array([_R_STD, _G_STD, _B_STD])
 class ConfigDict(object):
   pass
 
-def vgg_config(vgg_depth=16, add_v1net_early=False):
+def vgg_config(vgg_depth=16, 
+               add_v1net_early=False, 
+               add_v1net=False):
   """Return configuration to build VGG."""
   config = ConfigDict()
   config.image_size = (224, 224)
@@ -24,6 +26,6 @@ def vgg_config(vgg_depth=16, add_v1net_early=False):
   config.stddev_rgb = stddev_rgb_vgg
   config.ckpt_dir = "pretrained_nets/vgg_%s" % config.vgg_depth
   config.num_classes = 1000
-  config.add_v1net = False
+  config.add_v1net = add_v1net
   config.add_v1net_early = add_v1net_early
   return config

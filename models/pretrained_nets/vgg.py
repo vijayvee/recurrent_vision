@@ -204,38 +204,46 @@ def vgg_16(inputs,
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       if add_v1net_early:
         with tf.variable_scope("v1net-conv1"):
-          net = slim.conv2d(net, 32, [1,1])
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 32
+          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
           net = build_v1net(inputs=net, filters=n_filters,
                             timesteps=v1_timesteps,
                             kernel_size=v1_kernel_size)
-          net = slim.conv2d(net, 64, [1,1])
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
+
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
-      net = slim.max_pool2d(net, [2, 2], scope='pool2')
       if add_v1net:
         with tf.variable_scope("v1net-conv2"):
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
+      net = slim.max_pool2d(net, [2, 2], scope='pool2')
+      
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
-      net = slim.max_pool2d(net, [2, 2], scope='pool3')
       if add_v1net:
         with tf.variable_scope("v1net-conv3"):
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
+      net = slim.max_pool2d(net, [2, 2], scope='pool3')
+
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
-      net = slim.max_pool2d(net, [2, 2], scope='pool4')
       if add_v1net:
         with tf.variable_scope("v1net-conv4"):
           v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
+      net = slim.max_pool2d(net, [2, 2], scope='pool4')
+
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
+      if add_v1net:
+        with tf.variable_scope("v1net-conv5"):
+          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          net = build_v1net(inputs=net, filters=n_filters, 
+                            timesteps=v1_timesteps, 
+                            kernel_size=v1_kernel_size)
       net = slim.max_pool2d(net, [2, 2], scope='pool5')
 
       # Use conv2d instead of fully_connected layers.

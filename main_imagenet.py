@@ -47,6 +47,8 @@ flags.DEFINE_boolean("use_tpu", True,
                      "Whether to use TPU for training")
 flags.DEFINE_boolean("evaluate", False,
                      "Whether to evaluate during training")
+flags.DEFINE_boolean("add_v1net", False,
+                     "Whether to add v1net throughout")
 flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add v1net after first conv block")
 flags.DEFINE_boolean("compact", False,
@@ -71,8 +73,8 @@ def model_fn(features, labels, mode, params):
   host_call = None
   training = mode == tf.estimator.ModeKeys.TRAIN
   if params["model_name"].startswith("vgg_16"):
-    # TODO(vveeraba): Add compact for vgg
-    cfg = vgg_config(add_v1net_early=FLAGS.add_v1net_early)
+    cfg = vgg_config(add_v1net_early=FLAGS.add_v1net_early,
+                     add_v1net=FLAGS.add_v1net)
     model = VGG(cfg)
   elif params["model_name"].startswith("resnet_v2_50"):
     cfg = resnet_v2_config(add_v1net_early=FLAGS.add_v1net_early,
