@@ -114,7 +114,7 @@ def vgg_a(inputs,
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 1, slim.conv2d, 64, [3, 3], scope='conv1')
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         v1_timesteps, v1_kernel_size = 6, 5
         tf.logging.INFO("Adding V1Net with %s timesteps, %s kernel_size" % (v1_timesteps,
                                                                             v1_kernel_size))
@@ -205,7 +205,7 @@ def vgg_16(inputs,
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
-      if add_v1net_early:
+      if add_v1net_early and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv1"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
           net = build_v1net(inputs=net, filters=n_filters,
@@ -214,7 +214,7 @@ def vgg_16(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
 
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv2"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -223,7 +223,7 @@ def vgg_16(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
       
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv3"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -232,7 +232,7 @@ def vgg_16(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool3')
 
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv4"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -241,7 +241,7 @@ def vgg_16(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
 
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv5"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -326,7 +326,7 @@ def vgg_19(inputs,
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         v1_timesteps, v1_kernel_size = 6, 5
         tf.logging.INFO("Adding V1Net with %s timesteps, %s kernel_size" % (v1_timesteps,
                                                                             v1_kernel_size))
@@ -402,7 +402,7 @@ def vgg_16_hed(inputs,
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       # side_outputs.append(net)
       # net = slim.max_pool2d(net, [2, 2], scope='pool1')
-      if add_v1net_early:
+      if add_v1net_early and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv1"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -413,7 +413,7 @@ def vgg_16_hed(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
 
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv2"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -424,7 +424,7 @@ def vgg_16_hed(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
       
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv3"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -435,7 +435,7 @@ def vgg_16_hed(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool3')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv4"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
@@ -446,7 +446,7 @@ def vgg_16_hed(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
-      if add_v1net:
+      if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv5"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
