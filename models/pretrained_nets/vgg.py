@@ -41,8 +41,11 @@ from __future__ import absolute_import, division, print_function
 
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import tf_slim as slim  # pylint: disable=import-error
+
+from absl import flags
 from recurrent_vision.utils.model_utils import build_v1net, fuse_predictions
 
+FLAGS = flags.FLAGS
 
 def vgg_arg_scope(weight_decay=0.0005):
   """Defines the VGG arg scope.
@@ -204,7 +207,7 @@ def vgg_16(inputs,
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       if add_v1net_early:
         with tf.variable_scope("v1net-conv1"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
           net = build_v1net(inputs=net, filters=n_filters,
                             timesteps=v1_timesteps,
                             kernel_size=v1_kernel_size)
@@ -213,7 +216,7 @@ def vgg_16(inputs,
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
       if add_v1net:
         with tf.variable_scope("v1net-conv2"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 128
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
@@ -222,7 +225,7 @@ def vgg_16(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
       if add_v1net:
         with tf.variable_scope("v1net-conv3"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 256
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
@@ -231,7 +234,7 @@ def vgg_16(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
       if add_v1net:
         with tf.variable_scope("v1net-conv4"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
@@ -240,7 +243,7 @@ def vgg_16(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
       if add_v1net:
         with tf.variable_scope("v1net-conv5"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size)
@@ -401,7 +404,7 @@ def vgg_16_hed(inputs,
       # net = slim.max_pool2d(net, [2, 2], scope='pool1')
       if add_v1net_early:
         with tf.variable_scope("v1net-conv1"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 64
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size,
@@ -412,7 +415,7 @@ def vgg_16_hed(inputs,
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
       if add_v1net:
         with tf.variable_scope("v1net-conv2"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 128
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 128
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size,
@@ -423,7 +426,7 @@ def vgg_16_hed(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
       if add_v1net:
         with tf.variable_scope("v1net-conv3"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 256
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 256
           net = build_v1net(inputs=net, filters=n_filters, 
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size,
@@ -434,7 +437,7 @@ def vgg_16_hed(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
       if add_v1net:
         with tf.variable_scope("v1net-conv4"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                            timesteps=v1_timesteps, 
                            kernel_size=v1_kernel_size,
@@ -445,7 +448,7 @@ def vgg_16_hed(inputs,
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
       if add_v1net:
         with tf.variable_scope("v1net-conv5"):
-          v1_timesteps, v1_kernel_size, n_filters = 4, 3, 512
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
           net = build_v1net(inputs=net, filters=n_filters, 
                            timesteps=v1_timesteps, 
                            kernel_size=v1_kernel_size,

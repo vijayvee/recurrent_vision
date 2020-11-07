@@ -31,6 +31,8 @@ flags.DEFINE_integer("iterations_per_loop", 500,
                      "Number of iterations per TPU loop")
 flags.DEFINE_integer("image_size", 400,
                      "Input image size")
+flags.DEFINE_integer("v1_timesteps", 4,
+                     "Number of V1Net timesteps")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
 flags.DEFINE_string("checkpoint", "",
