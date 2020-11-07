@@ -33,6 +33,8 @@ flags.DEFINE_integer("iterations_per_loop", 1200,
                      "Number of iterations per TPU loop")
 flags.DEFINE_integer("image_size", 400,
                      "Input image size")
+flags.DEFINE_integer("v1_timesteps", 4,
+                     "Number of V1Net timesteps")
 flags.DEFINE_string("experiment_name", "",
                     "Unique experiment identifier")
 flags.DEFINE_string("checkpoint", "",
@@ -49,6 +51,8 @@ flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add v1net after first conv block")
 flags.DEFINE_boolean("add_v1net", False,
                      "Whether to add v1net throughout")
+flags.DEFINE_boolean("train_and_eval", False,
+                     "Whether to evaluate between training epochs")
 flags.DEFINE_boolean("preprocess", False,
                      "Whether to add preprocessing")
 flags.DEFINE_string("tpu_name", "",
@@ -198,7 +202,7 @@ def model_fn(features, labels, mode, params):
               'xentropy': xentropy,
               'rmse': rmse,
               }
-      eval_metrics = (metric_fn, [labels["label"], predictions])
+    eval_metrics = (metric_fn, [labels["label"], predictions])
     
   return tf.estimator.tpu.TPUEstimatorSpec(train_op=train_op,
                                            mode=mode, loss=loss, 
@@ -316,7 +320,10 @@ def main(argv):
     current_step = 0
   
   while current_step < num_train_steps:
-    next_checkpoint = min(num_train_steps, current_step + eval_every)
+    if args["train_and_eval"]:
+      next_checkpoint = min(num_train_steps, current_step + eval_every)
+    else:
+      next_checkpoint = num_train_steps
     classifier.train(
           input_fn=input_fn_train, max_steps=next_checkpoint)
     current_step = next_checkpoint

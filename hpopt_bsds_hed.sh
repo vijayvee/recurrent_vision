@@ -7,7 +7,7 @@ TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
 CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="adam"
-EVALUATE_EVERY=3
+EVALUATE_EVERY=1
 BASE_DIR="bsds_hpopt_multiv1net"
 USE_TPU=True
 ADD_V1NET_EARLY=True
@@ -20,7 +20,7 @@ DATA_DIR="bsds_data/HED-BSDS/tfrecords"
 declare -a wd=(5e-4 2e-4 1e-4)
 for WEIGHT_DECAY in "${wd[@]}"
 do
-    EXPERIMENT_NAME="hed_multiv1net_hpopt_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_traineval"
+    EXPERIMENT_NAME="hed_multiv1net_hpopt_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_traineval_mse"
     echo "Running ${EXPERIMENT_NAME} on ${1}"
     python main_bsds_traineval.py \
        --learning_rate=${LEARNING_RATE} \
