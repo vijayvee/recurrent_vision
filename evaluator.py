@@ -4,6 +4,7 @@ import os
 import cv2  # pylint: disable=import-error
 import numpy as np
 import skimage.io as io  # pylint: disable=import-error
+from scipy.io import savemat
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from tqdm import tqdm
 from absl import app, flags
@@ -27,6 +28,9 @@ flags.DEFINE_string("out_dir", "",
                     "Directory where predictions to be written")
 flags.DEFINE_string("checkpoint_dir", "",
                     "Directory where checkpoints are stored")
+flags.DEFINE_string("gcs_dir", "",
+                    "Directory where checkpoints are "
+                    "stored for a suite of models on GCS")
 flags.DEFINE_boolean("preprocess", False,
                      "Whether to add imagenet mean subtraction")
 flags.DEFINE_boolean("add_v1net_early", False,
@@ -67,6 +71,24 @@ def save_image(image, prefix=None,
   io.imsave(filename, image)
   return filename
 
+def save_mat(image, prefix=None,
+             path=None, curr_idx=None):
+  """Write images to disk."""
+  if curr_idx:
+    filename = "%s_%04d.png" % (prefix.split('.')[0], 
+                                curr_idx)
+  else:
+    filename = "%s.png" % prefix.split('.')[0]
+  filename = os.path.join(path, filename)
+  if image.shape[0] == 1:
+    # Saves only one image
+    image = image[0]
+  if image.shape[-1] == 1:
+    image = image[:,:,0]
+  mat_dict = {"predictions": image}
+  savemat(filename, mat_dict)
+  return filename
+
 
 class Evaluator:
   """Evaluate models on ImageNet classification."""
@@ -75,6 +97,7 @@ class Evaluator:
     self.in_dir = FLAGS.in_dir
     self.out_dir = FLAGS.out_dir
     self.checkpoint_dir = FLAGS.checkpoint_dir
+    self.gcs_dir = FLAGS.gcs_dir
 
   def build_model(self, images):
     """Build imagenet classification model."""
@@ -91,10 +114,10 @@ class Evaluator:
                                             preprocess=FLAGS.preprocess)
     return predictions
 
-  def evaluate(self):
+  def evaluate(self, in_dir, out_dir, checkpoint=None):
     """Function to write boundary predictions."""
-    in_dir = self.in_dir
-    out_dir = self.out_dir
+    if not checkpoint:
+      checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
     img_fns = tf.gfile.ListDirectory(in_dir)
     img_fns = [i for i in img_fns if "jpg" in i]
     if not tf.gfile.Exists(out_dir):
@@ -102,10 +125,8 @@ class Evaluator:
     with tf.Session() as sess:
       # Build and restore model
       images = tf.placeholder(tf.float32, [1, 321, 481, 3])
-      predictions = tf.nn.sigmoid(self.build_model(images)) 
-      latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
-      self.model.restore_checkpoint(sess, latest_checkpoint)
-
+      predictions = tf.nn.sigmoid(self.build_model(images))
+      self.model.restore_checkpoint(sess, checkpoint)
       # Generate predictions
       for img_fn in tqdm(img_fns):
         img, transpose = load_image(os.path.join(in_dir, img_fn))
@@ -115,8 +136,31 @@ class Evaluator:
           model_pred = np.transpose(model_pred, 
                                     (0, 2, 1, 3))
           print(model_pred.shape)
-        save_image(model_pred, prefix=img_fn, 
+        # TODO(vveeraba): Write savemat below
+        save_mat(model_pred, prefix=img_fn, 
                    path=out_dir)
+
+  def evaluate_recursive(self):
+    """Function to write boundary 
+       predictions for all checkpoints."""
+    in_dir = self.in_dir
+    model_dirs = tf.gfile.ListDirectory(self.gcs_dir)
+    model_dirs = [i for i in model_dirs 
+                  if i.startswith("model_dir")]
+    for m_d in model_dirs:
+      out_dir = os.path.join(self.out_dir, m_d)
+      if not tf.gfile.Exists(out_dir):
+        tf.gfile.MakeDirs(out_dir)
+      checkpoints = tf.gfile.ListDirectory(
+                          os.path.join(self.gcs_dir, m_d))
+      checkpoints = [i for i in checkpoints
+                      if '.ckpt' in i]
+      for checkpoint in checkpoints:
+        sub_out_dir = os.path.join(out_dir, checkpoint)
+        if not tf.gfile.Exists(sub_out_dir):
+          tf.gfile.MakeDirs(sub_out_dir)
+        checkpoint = os.path.join(self.gcs_dir, m_d, checkpoint)
+        self.evaluate(in_dir, sub_out_dir, checkpoint)
   
   def evaluate_ilsvrc(self):
     """Function to evaluate on ImageNet classification."""
@@ -162,7 +206,7 @@ class Evaluator:
 def main(argv):
   del argv  # unused here
   evaluator = Evaluator()
-  evaluator.evaluate()
+  evaluator.evaluate_recursive()
 
 
 if __name__=="__main__":
