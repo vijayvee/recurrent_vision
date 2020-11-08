@@ -98,7 +98,8 @@ def model_fn(features, labels, mode, params):
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
   # TODO(vveeraba): Change positive class weight below
-  pos_weight = 1.1
+  # Changing pos_weight to num_positive_samples / num_negative_samples
+  pos_weight = 1.1 
   loss_fn = tf.nn.weighted_cross_entropy_with_logits
   xent = tf.nn.sigmoid_cross_entropy_with_logits
   loss_fuse = tf.reduce_mean(xent(logits=predictions,

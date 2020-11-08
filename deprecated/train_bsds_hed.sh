@@ -1,16 +1,16 @@
 #!/bin/bash
 export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba/src
 
-NUM_EPOCHS=100
-LEARNING_RATE=$2
+NUM_EPOCHS=50
+LEARNING_RATE=1e-4
 WEIGHT_DECAY=1e-4
 TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
-V1_TIMESTEPS=5
+V1_TIMESTEPS=$2
 CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="adam"
 EVALUATE_EVERY=1
-BASE_DIR="bsds_hpopt_multiv1net"
+BASE_DIR="bsds_hpopt_multiv1net/hpopt3-training-timesteps-60k"
 USE_TPU=True
 ADD_V1NET_EARLY=True
 ADD_V1NET=True
@@ -20,7 +20,9 @@ TRAIN_AND_EVAL=False
 NUM_CORES=8
 DATA_DIR="bsds_data/HED-BSDS/tfrecords"
 
-EXPERIMENT_NAME="hed_multiv1net_hpopt_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_traineval"
+for RUN in 1 2 3
+do
+EXPERIMENT_NAME="hed_multiv1net_hpopt_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_posweight_1_1_train_run_${RUN}"
 echo "Running ${EXPERIMENT_NAME} on ${1}"
 python main_bsds_traineval.py \
        --learning_rate=${LEARNING_RATE} \
@@ -42,3 +44,4 @@ python main_bsds_traineval.py \
        --train_and_eval=${TRAIN_AND_EVAL} \
        --num_cores=${NUM_CORES} \
        --data_dir=${DATA_DIR}  
+done
