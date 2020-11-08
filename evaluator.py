@@ -37,6 +37,8 @@ flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add V1Net")
 flags.DEFINE_boolean("add_v1net", False,
                      "Whether to add V1Net throughout")
+flags.DEFINE_integer("v1_timesteps", 4,
+                     "Number of V1Net timesteps")
 
 def load_image(image_path):
   """Load images from disk."""
@@ -75,10 +77,10 @@ def save_mat(image, prefix=None,
              path=None, curr_idx=None):
   """Write images to disk."""
   if curr_idx:
-    filename = "%s_%04d.png" % (prefix.split('.')[0], 
+    filename = "%s_%04d.mat" % (prefix.split('.')[0], 
                                 curr_idx)
   else:
-    filename = "%s.png" % prefix.split('.')[0]
+    filename = "%s.mat" % prefix.split('.')[0]
   filename = os.path.join(path, filename)
   if image.shape[0] == 1:
     # Saves only one image
@@ -154,8 +156,9 @@ class Evaluator:
       checkpoints = tf.gfile.ListDirectory(
                           os.path.join(self.gcs_dir, m_d))
       checkpoints = [i for i in checkpoints
-                      if '.ckpt' in i]
+                      if ".ckpt" in i and ".meta" in i]
       for checkpoint in checkpoints:
+        checkpoint = checkpoint.split(".meta")[0]
         sub_out_dir = os.path.join(out_dir, checkpoint)
         if not tf.gfile.Exists(sub_out_dir):
           tf.gfile.MakeDirs(sub_out_dir)
