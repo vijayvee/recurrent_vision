@@ -9,15 +9,15 @@ def build_learning_rate(initial_lr,
                         steps_per_epoch=None,
                         lr_decay_type='exponential',
                         decay_factor=0.1,
-                        decay_epochs=50,
+                        decay_steps=20000,
                         total_steps=None,
                         warmup_epochs=None):
   """Build learning rate."""
   if lr_decay_type == 'exponential':
     assert steps_per_epoch is not None
-    decay_steps = steps_per_epoch * decay_epochs
     lr = tf.train.exponential_decay(
-        initial_lr, global_step, decay_steps, decay_factor, staircase=True)
+        initial_lr, global_step, decay_steps, 
+        decay_factor, staircase=True)
   elif lr_decay_type == 'cosine':
     assert total_steps is not None
     lr = 0.5 * initial_lr * (
