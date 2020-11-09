@@ -409,7 +409,7 @@ def vgg_16_hed(inputs,
                             timesteps=v1_timesteps, 
                             kernel_size=v1_kernel_size,
                             is_training=is_training)
-          side_outputs.append(net)
+      side_outputs.append(net)
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
 
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
