@@ -112,7 +112,8 @@ class Evaluator:
     elif self.model_name.startswith("vgg_16"):
       model_config = vgg_config()
     self.model = VGG(model_config)
-    predictions, _ = self.model.build_model(images, is_training=False,
+    predictions, _ = self.model.build_model(images, cams=tf.ones_like(images),
+                                            is_training=False,
                                             preprocess=FLAGS.preprocess)
     return predictions
 
@@ -124,7 +125,7 @@ class Evaluator:
     img_fns = [i for i in img_fns if "jpg" in i]
     if not tf.gfile.Exists(out_dir):
       tf.gfile.MakeDirs(out_dir)
-    with tf.Session() as sess:
+    with tf.Graph().as_default(), tf.Session() as sess:
       # Build and restore model
       images = tf.placeholder(tf.float32, [1, 321, 481, 3])
       predictions = tf.nn.sigmoid(self.build_model(images))
@@ -137,8 +138,6 @@ class Evaluator:
         if transpose:
           model_pred = np.transpose(model_pred, 
                                     (0, 2, 1, 3))
-          print(model_pred.shape)
-        # TODO(vveeraba): Write savemat below
         save_mat(model_pred, prefix=img_fn, 
                    path=out_dir)
 
@@ -149,7 +148,9 @@ class Evaluator:
     model_dirs = tf.gfile.ListDirectory(self.gcs_dir)
     model_dirs = [i for i in model_dirs 
                   if i.startswith("model_dir")]
+    tf.logging.info("Found %s model directories" % len(model_dirs))
     for m_d in model_dirs:
+      print("Evaluating %s" % m_d)
       out_dir = os.path.join(self.out_dir, m_d)
       if not tf.gfile.Exists(out_dir):
         tf.gfile.MakeDirs(out_dir)
@@ -158,6 +159,9 @@ class Evaluator:
       checkpoints = [i for i in checkpoints
                       if ".ckpt" in i and ".meta" in i]
       for checkpoint in checkpoints:
+        # Don't evaluate checkpoint-0 (rand init)
+        if "model.ckpt-0" in checkpoint:
+          continue
         checkpoint = checkpoint.split(".meta")[0]
         sub_out_dir = os.path.join(out_dir, checkpoint)
         if not tf.gfile.Exists(sub_out_dir):
