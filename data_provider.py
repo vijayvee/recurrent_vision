@@ -323,6 +323,8 @@ class BSDSDataProvider:
             [], tf.string),
         "mask_raw": tf.FixedLenFeature(
             [], tf.string),
+        "cam_raw": tf.FixedLenFeature(
+            [], tf.string),
         "image_path": tf.FixedLenFeature(
             [], tf.string)
         }
@@ -331,18 +333,22 @@ class BSDSDataProvider:
     # Deserialize data
     img = tf.decode_raw(sample["image_raw"], tf.float32)
     label = tf.decode_raw(sample["mask_raw"], tf.float32)
+    cam = tf.decode_raw(sample["cam_raw"], tf.float32)
     height = sample["height"][0]
     width = sample["width"][0]
     img = tf.reshape(img, (height, width, 3))
     label = tf.reshape(label, (height, width, 1))
-    img_mask = tf.concat([img, label], axis=-1)
+    img_mask = tf.concat([img, label, cam], axis=-1)
     img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
                                                 self.image_h, 
                                                 self.image_w)
     img = tf.stack(
               tf.unstack(img_mask, 
-                         axis=-1)[:-1],
+                         axis=-1)[:2],
                          axis=-1)
-    label = tf.unstack(img_mask, axis=-1)[-1]
+    label = tf.unstack(img_mask, axis=-1)[2]
     label = tf.expand_dims(label, axis=2)
-    return {"image": img}, {"label": label}
+    cam = tf.expand_dims(tf.unstack(img_mask, 
+                                    axis=-1)[3],
+                         axis=2)
+    return {"image": img}, {"label": label}, {"cam": cam}

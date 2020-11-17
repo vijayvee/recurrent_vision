@@ -155,7 +155,7 @@ def vgg_a(inputs,
 vgg_a.default_image_size = 224
 
 
-def vgg_16(inputs,
+def vgg_16(inputs, cams=None,
            num_classes=1000,
            is_training=True,
            dropout_keep_prob=0.5,
@@ -198,6 +198,7 @@ def vgg_16(inputs,
       or the input to the logits layer (if num_classes is 0 or None).
     end_points: a dict of tensors with intermediate activations.
   """
+  del cams  # unused here
   with tf.variable_scope(
       scope, 'vgg_16', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.original_name_scope + '_end_points'
@@ -274,7 +275,7 @@ def vgg_16(inputs,
 vgg_16.default_image_size = 224
 
 
-def vgg_19(inputs,
+def vgg_19(inputs, cams=None,
            num_classes=1000,
            is_training=True,
            dropout_keep_prob=0.5,
@@ -318,6 +319,7 @@ def vgg_19(inputs,
       None).
     end_points: a dict of tensors with intermediate activations.
   """
+  del cams  # unused here
   with tf.variable_scope(
       scope, 'vgg_19', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.original_name_scope + '_end_points'
@@ -367,7 +369,7 @@ def vgg_19(inputs,
 vgg_19.default_image_size = 224
 
 
-def vgg_16_hed(inputs,
+def vgg_16_hed(inputs, cams=None,
               num_classes=1,
               is_training=True,
               add_v1net_early=False,
@@ -389,6 +391,7 @@ def vgg_16_hed(inputs,
     side_outputs_fullres: list of side output logits resized to input resolution.
     end_points: a dict of tensors with intermediate activations.
   """
+  del cams  # unused here
   side_outputs = []
   _, h, w, _ = inputs.shape.as_list()
   with tf.variable_scope(
@@ -446,6 +449,139 @@ def vgg_16_hed(inputs,
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
+      if add_v1net and FLAGS.v1_timesteps:
+        with tf.variable_scope("v1net-conv5"):
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
+          net = build_v1net(inputs=net, filters=n_filters, 
+                           timesteps=v1_timesteps, 
+                           kernel_size=v1_kernel_size,
+                           is_training=is_training)
+      side_outputs.append(net)
+      end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+      side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
+                              for side_output in side_outputs]
+      with tf.variable_scope("side_output_classifiers", reuse=reuse):
+        side_outputs_fullres = [slim.conv2d(side_output, 1, [1, 1],
+                                    activation_fn=None,
+                                    normalizer_fn=None,
+                                    )
+                                for side_output in side_outputs_fullres]
+      side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
+      if reduce_conv:
+        with tf.variable_scope("side_output_fusion"):
+          side_outputs_ = tf.transpose(side_outputs_fullres, 
+                                            (1,2,3,4,0))
+          side_outputs_ = tf.squeeze(side_outputs_, axis=3)
+          fused_predictions = fuse_predictions(side_outputs_)
+      else:
+        fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
+      end_points['fused_predictions'] = fused_predictions
+      side_outputs_fullres = tf.reshape(side_outputs_fullres,
+                                        (-1, h, w, 1))
+      end_points['side_outputs_fullres'] = side_outputs_fullres
+      return fused_predictions, end_points
+
+def vgg_16_hed_cam(inputs, cams,
+                    num_classes=1,
+                    is_training=True,
+                    add_v1net_early=False,
+                    add_v1net=False,
+                    reuse=None,
+                    reduce_conv=True,
+                    scope='vgg_16',
+                    ):
+  """VGG-16 implementation of HED.
+
+  Args:
+    inputs: a tensor of size [batch_size, height, width, channels].
+    is_training: whether or not the model is being trained.
+    add_v1net: whether to add v1net blocks after convolutions.
+    reuse: whether or not the network and its variables should be reused. To be
+      able to reuse 'scope' must be given.
+    scope: Optional scope for the variables.
+  Returns:
+    side_outputs_fullres: list of side output logits resized to input resolution.
+    end_points: a dict of tensors with intermediate activations.
+  """
+  side_outputs = []
+  _, h, w, _ = inputs.shape.as_list()
+  with tf.variable_scope(
+      scope, 'vgg_16', [inputs], reuse=reuse) as sc:
+    end_points_collection = sc.original_name_scope + '_end_points'
+    # Collect outputs for conv2d, fully_connected and max_pool2d.
+    # TODO(vveerabadran): Where to add V1Net?
+    # TODO(vveerabadran): Should side outputs be output of V1Net?
+    with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
+                        outputs_collections=end_points_collection):
+      net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+      with tf.variable_scope("cam-conv1"):
+        cam_net = slim.repeat(cams, 1, slim.conv2d, 64, [1, 1], scope="cam-conv1")
+        net = net + cam_net
+
+      if add_v1net_early and FLAGS.v1_timesteps:
+        with tf.variable_scope("v1net-conv1"):
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
+          net = build_v1net(inputs=net, filters=n_filters, 
+                            timesteps=v1_timesteps, 
+                            kernel_size=v1_kernel_size,
+                            is_training=is_training)
+      side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool1')
+      cam_net = slim.max_pool2d(cam_net, [2, 2], scope='cam_pool1')
+
+      net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
+      with tf.variable_scope("cam-conv2"):
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 128, [1, 1], scope="cam-conv2")
+        net = net + cam_net
+
+      if add_v1net and FLAGS.v1_timesteps:
+        with tf.variable_scope("v1net-conv2"):
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 128
+          net = build_v1net(inputs=net, filters=n_filters, 
+                            timesteps=v1_timesteps, 
+                            kernel_size=v1_kernel_size,
+                            is_training=is_training)
+      side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool2')
+      cam_net = slim.max_pool2d(cam_net, [2, 2], scope='cam_pool2')
+
+      net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
+      with tf.variable_scope("cam-conv3"):
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 256, [1, 1], scope="cam-conv3")
+        net = net + cam_net
+
+      if add_v1net and FLAGS.v1_timesteps:
+        with tf.variable_scope("v1net-conv3"):
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 256
+          net = build_v1net(inputs=net, filters=n_filters, 
+                            timesteps=v1_timesteps, 
+                            kernel_size=v1_kernel_size,
+                            is_training=is_training)
+      side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool3')
+      cam_net = slim.max_pool2d(cam_net, [2, 2], scope='cam_pool3')
+
+      net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
+      with tf.variable_scope("cam-conv4"):
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 512, [1, 1], scope="cam-conv4")
+        net = net + cam_net
+
+      if add_v1net and FLAGS.v1_timesteps:
+        with tf.variable_scope("v1net-conv4"):
+          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
+          net = build_v1net(inputs=net, filters=n_filters, 
+                           timesteps=v1_timesteps, 
+                           kernel_size=v1_kernel_size,
+                           is_training=is_training)
+      side_outputs.append(net)
+      net = slim.max_pool2d(net, [2, 2], scope='pool4')
+      cam_net = slim.max_pool2d(cam_net, [2, 2], scope='cam_pool4')
+
+      net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
+      with tf.variable_scope("cam-conv5"):
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 512, [1, 1], scope="cam-conv5")
+        net = net + cam_net
+
       if add_v1net and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv5"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
