@@ -5,3 +5,6 @@
 *ckpt
 models/pretrained_nets/checkpoints/
 results/*
+*pdf
+*json
+*.DS_Store
