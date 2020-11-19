@@ -145,9 +145,11 @@ def model_fn(features, labels, mode, params):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
     train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)
-    fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
-
-    train_op = tf.group([train_op, update_ops, fast_train_op])
+    if FLAGS.v1_timesteps:
+      fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
+      train_op = tf.group([train_op, update_ops, fast_train_op])
+    else:
+      train_op = tf.group([train_op, update_ops])
 
     gs_t = tf.reshape(global_step, [1])
     lr_t = tf.reshape(learning_rate, [1])
@@ -304,7 +306,7 @@ def main(argv):
                 cluster=tpu_cluster_resolver,
                 model_dir=model_dir,
                 tpu_config=tpu_config,
-                save_checkpoints_steps=args["iterations_per_checkpoint"],
+                save_checkpoints_steps=args["iterations_per_loop"],
                 keep_checkpoint_max=20)
 
   classifier = tf.estimator.tpu.TPUEstimator(
