@@ -10,7 +10,7 @@ from recurrent_vision.data_provider import BSDSDataProvider
 from recurrent_vision.models.vgg16_hed_config import vgg_16_hed_config
 from recurrent_vision.models.vgg_model import VGG
 from recurrent_vision.optimizers import get_optimizer, build_learning_rate
-from recurrent_vision.losses import weighted_ce
+from recurrent_vision.losses import weighted_ce, weighted_ce_bdcn
 
 
 tf.disable_v2_behavior()
@@ -68,8 +68,6 @@ flags.DEFINE_string("tpu_zone", "europe-west4-a",
 flags.DEFINE_string("data_dir", "",
                     "Data directory with BSDS500 tfrecords")
 
-# TODO(vveeraba): add learning rate decay
-# TODO(vveeraba): add dropout
 # TODO(vveeraba): check efficientnet main.py and implement features
 
 def model_fn(features, labels, mode, params):
@@ -103,18 +101,12 @@ def model_fn(features, labels, mode, params):
     }
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
-  # TODO(vveeraba): Change positive class weight below
-  pos_weight = 5.
-  loss_fn = tf.nn.weighted_cross_entropy_with_logits
-  loss_fuse = tf.reduce_mean(loss_fn(logits=predictions,
-                                     labels=labels["label"],
-                                     pos_weight=pos_weight,
-                                     ))
-  loss_side = tf.reduce_mean(loss_fn(logits=side_predictions,
-                                  labels=side_labels,
-                                  pos_weight=pos_weight,
-                                  ))
-  loss = loss_side + loss_fuse + FLAGS.weight_decay * tf.add_n( 
+  loss_fuse = weighted_ce_bdcn(logits=predictions,
+                               labels=labels["label"])
+  loss_side = weighted_ce_bdcn(logits=side_predictions,
+                               labels=side_labels)
+
+  loss = 0.5 * loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.add_n( 
                 [tf.nn.l2_loss(v) for v in tf.trainable_variables()
                            if 'normalization' not in v.name])
   
@@ -125,30 +117,33 @@ def model_fn(features, labels, mode, params):
                                         global_step,
                                         steps_per_epoch,
                                         decay_factor=0.1,
-                                        decay_steps=20000)
-    fast_start = min(FLAGS.learning_rate*100, 1e-4)
+                                        decay_steps=10000)
+    fast_start = min(FLAGS.learning_rate*100, 5e-4)
     fast_learning_rate = build_learning_rate(fast_start,
                                              global_step,
                                              steps_per_epoch,
                                              decay_factor=0.1,
-                                             decay_steps=20000)
+                                             decay_steps=10000)
 
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
                               FLAGS.use_tpu)
     slow_vars = [var for var in vgg.model_vars 
                     if "v1net" not in var.name]
+
     fast_vars = list(set(vgg.model_vars).difference(set(slow_vars)))
     fast_optimizer = get_optimizer(fast_learning_rate,
                                    FLAGS.optimizer,
                                    FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-
     train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)
-    fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
-
-    train_op = tf.group([train_op, update_ops, fast_train_op])
-
+    
+    if FLAGS.v1_timesteps:                                                       
+      fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
+      train_op = tf.group([train_op, update_ops, fast_train_op])              
+    else:                                                                               
+      train_op = tf.group([train_op, update_ops]) 
+    
     gs_t = tf.reshape(global_step, [1])
     lr_t = tf.reshape(learning_rate, [1])
     fast_lr_t = tf.reshape(fast_learning_rate, [1])
@@ -257,8 +252,10 @@ def get_scaffold_fn():
 
 def main(argv):
   del argv  # unused here
-  gcs_root = "gs://v1net-tpu-bucket/"
   args = FLAGS.flag_values_dict()
+
+  # Setting paths
+  gcs_root = "gs://v1net-tpu-bucket/"
   gcs_path = "gs://v1net-tpu-bucket/%s/" % args["base_dir"]
   model_dir = os.path.join(gcs_path, "model_dir_%s" % args["experiment_name"])
   summaries_dir = os.path.join(gcs_path, "summaries")
@@ -269,6 +266,7 @@ def main(argv):
   args["model_dir"] = model_dir
   args["summaries_dir"] = summaries_dir
 
+  # Set training variables
   rand_seed = np.random.randint(10000)
   tf.set_random_seed(rand_seed)
   args["random_seed"] = rand_seed
@@ -307,6 +305,7 @@ def main(argv):
                 save_checkpoints_steps=args["iterations_per_checkpoint"],
                 keep_checkpoint_max=20)
 
+  # Create classifier for training
   classifier = tf.estimator.tpu.TPUEstimator(
                 use_tpu=args["use_tpu"],
                 model_fn=model_fn,
@@ -348,5 +347,3 @@ def main(argv):
 if __name__=="__main__":
   tf.logging.set_verbosity('INFO')
   app.run(main)
-
-
