@@ -23,6 +23,8 @@ flags.DEFINE_float("weight_decay", 1e-4,
                    "weight decay multiplier")
 flags.DEFINE_float("evaluate_every", 0.01,
                    "Evaluation frequency in epochs")
+flags.DEFINE_float("label_gamma", 0.4,
+                   "Gamma for label consensus sampling")
 flags.DEFINE_integer("num_epochs", 100,
                      "Number of training epochs")
 flags.DEFINE_integer("train_batch_size", 1,
@@ -35,7 +37,7 @@ flags.DEFINE_integer("iterations_per_loop", 5000,
                      "Number of iterations per TPU loop")
 flags.DEFINE_integer("iterations_per_checkpoint", 10000,
                      "Number of iterations per checkpoint")
-flags.DEFINE_integer("image_size", 400,
+flags.DEFINE_integer("image_size", 500,
                      "Input image size")
 flags.DEFINE_integer("v1_timesteps", 4,
                      "Number of V1Net timesteps")
@@ -85,6 +87,7 @@ def model_fn(features, labels, mode, params):
                           add_v1net=FLAGS.add_v1net)
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
+                                           cams=features["cam"],
                                            is_training=training,
                                            preprocess=FLAGS.preprocess)
   # TODO(vveeraba): Add vgg restore checkpoint
@@ -102,13 +105,14 @@ def model_fn(features, labels, mode, params):
     return tf.estimator.tpu.TPUEstimatorSpec(mode, predictions=predictions)
 
   loss_fuse = weighted_ce_bdcn(logits=predictions,
-                               labels=labels["label"])
+                               labels=labels["label"],
+                               gamma=FLAGS.label_gamma)
   loss_side = weighted_ce_bdcn(logits=side_predictions,
-                               labels=side_labels)
-
-  loss = 0.5 * loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.add_n( 
-                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
-                           if 'normalization' not in v.name])
+                               labels=side_labels,
+                               gamma=FLAGS.label_gamma)
+  loss = 0.5 * loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.reduce_mean( 
+               [tf.nn.l2_loss(v) for v in tf.trainable_variables()
+                           if 'normalization' not in v.name and 'bias' not in v.name])
   
   if training:
     global_step = tf.train.get_global_step()
@@ -127,6 +131,7 @@ def model_fn(features, labels, mode, params):
 
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
+                              FLAGS.weight_decay,
                               FLAGS.use_tpu)
     slow_vars = [var for var in vgg.model_vars 
                     if "v1net" not in var.name]
@@ -134,6 +139,7 @@ def model_fn(features, labels, mode, params):
     fast_vars = list(set(vgg.model_vars).difference(set(slow_vars)))
     fast_optimizer = get_optimizer(fast_learning_rate,
                                    FLAGS.optimizer,
+                                   FLAGS.weight_decay,
                                    FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)

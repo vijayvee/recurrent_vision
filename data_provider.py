@@ -283,11 +283,11 @@ class BSDSDataProvider:
     if is_training:
       self.training = True
       #tf.logging.info("Training on full set (train, val)")
-      glob_pattern = "%s/train*" % data_dir
+      glob_pattern = "%s/cam_train*" % data_dir
       self.num_examples = 19200
     else:
       self.training=False
-      glob_pattern = "%s/validation*" % data_dir
+      glob_pattern = "%s/cam_validation*" % data_dir
       self.num_examples = 9600
     files = tf.data.Dataset.list_files(glob_pattern, shuffle=is_training)
     # parallel fetching of tfrecords dataset
@@ -299,7 +299,7 @@ class BSDSDataProvider:
                           num_parallel_calls=threads)
     if is_training:
       # shuffling dataset
-      shuffle_buffer = min(16*self.batch_size, 256)
+      shuffle_buffer = min(4*self.batch_size, 256)
       tf.logging.info("Shuffle buffer set to %s" % shuffle_buffer)
       dataset = dataset.shuffle(buffer_size=shuffle_buffer)
     dataset = dataset.repeat(count=None)
@@ -338,17 +338,18 @@ class BSDSDataProvider:
     width = sample["width"][0]
     img = tf.reshape(img, (height, width, 3))
     label = tf.reshape(label, (height, width, 1))
+    cam = tf.reshape(cam, (height, width, 1))
     img_mask = tf.concat([img, label, cam], axis=-1)
     img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
                                                 self.image_h, 
                                                 self.image_w)
     img = tf.stack(
               tf.unstack(img_mask, 
-                         axis=-1)[:2],
+                         axis=-1)[:3],
                          axis=-1)
-    label = tf.unstack(img_mask, axis=-1)[2]
+    label = tf.unstack(img_mask, axis=-1)[3]
     label = tf.expand_dims(label, axis=2)
     cam = tf.expand_dims(tf.unstack(img_mask, 
-                                    axis=-1)[3],
+                                    axis=-1)[4],
                          axis=2)
-    return {"image": img}, {"label": label}, {"cam": cam}
+    return {"image": img, "cam": cam}, {"label": label}
