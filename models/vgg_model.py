@@ -26,7 +26,7 @@ class VGG(ModelBuilder):
 
   def build_model(self, images, cams=None,
                   is_training=True, 
-                  preprocess=False):
+                  preprocess=True):
     """Build model with input images."""
     net = tf.identity(images)
     cam_net = tf.identity(cams)

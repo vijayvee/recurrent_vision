@@ -2,6 +2,7 @@
 
 import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
+import tf_slim as slim   # pylint: disable=import-error
 from recurrent_vision.utils.horizontal_cells.v1net_cell import V1Net_BN_cell
 from recurrent_vision.utils.horizontal_cells.v1net_compact_cell import V1NetCompact
 tf.disable_v2_behavior()
@@ -160,3 +161,34 @@ def build_dense(inputs,
   inputs = tf.layers.dense(inputs=inputs,
                            units=units)
   return inputs
+
+def build_hed_output(side_outputs, 
+                     height, width,
+                     reuse=None,
+                     reduce_conv=True):
+  """Function to build HED boundary prediction output.
+  Args:
+    inputs: Tensor of input activations    
+  Returns:
+    Output of dense layer
+  """
+  side_outputs_fullres = [tf.image.resize_bilinear(side_output, [height,width])
+                              for side_output in side_outputs]
+  with tf.variable_scope("side_output_classifiers", reuse=reuse):
+    side_outputs_fullres = [slim.conv2d(side_output, 1, [1, 1],
+                                activation_fn=None,
+                                normalizer_fn=None,
+                                )
+                            for side_output in side_outputs_fullres]
+  side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
+  if reduce_conv:
+    with tf.variable_scope("side_output_fusion"):
+      side_outputs_ = tf.transpose(side_outputs_fullres, 
+                                        (1,2,3,4,0))
+      side_outputs_ = tf.squeeze(side_outputs_, axis=3)
+      fused_predictions = fuse_predictions(side_outputs_)
+  else:
+    fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
+  side_outputs_fullres = tf.reshape(side_outputs_fullres,
+                                    (-1, height, width, 1))
+  return fused_predictions, side_outputs_fullres

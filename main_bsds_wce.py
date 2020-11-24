@@ -70,7 +70,6 @@ flags.DEFINE_string("tpu_zone", "europe-west4-a",
 flags.DEFINE_string("data_dir", "",
                     "Data directory with BSDS500 tfrecords")
 
-# TODO(vveeraba): check efficientnet main.py and implement features
 
 def model_fn(features, labels, mode, params):
   """Build model for boundary detection.
@@ -131,7 +130,6 @@ def model_fn(features, labels, mode, params):
 
     optimizer = get_optimizer(learning_rate,
                               FLAGS.optimizer,
-                              FLAGS.weight_decay,
                               FLAGS.use_tpu)
     slow_vars = [var for var in vgg.model_vars 
                     if "v1net" not in var.name]
@@ -139,7 +137,6 @@ def model_fn(features, labels, mode, params):
     fast_vars = list(set(vgg.model_vars).difference(set(slow_vars)))
     fast_optimizer = get_optimizer(fast_learning_rate,
                                    FLAGS.optimizer,
-                                   FLAGS.weight_decay,
                                    FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)

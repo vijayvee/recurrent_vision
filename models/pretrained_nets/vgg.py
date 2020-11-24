@@ -509,13 +509,11 @@ def vgg_16_hed_cam(inputs, cams,
       scope, 'vgg_16', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.original_name_scope + '_end_points'
     # Collect outputs for conv2d, fully_connected and max_pool2d.
-    # TODO(vveerabadran): Where to add V1Net?
-    # TODO(vveerabadran): Should side outputs be output of V1Net?
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       with tf.variable_scope("cam-conv1"):
-        cam_net = slim.repeat(cams, 1, slim.conv2d, 64, [1, 1], scope="cam-conv1")
+        cam_net = slim.repeat(cams, 1, slim.conv2d, 64, [3, 3], scope="cam-conv1")
         net = net + cam_net
 
       if add_v1net_early and FLAGS.v1_timesteps:
@@ -531,7 +529,7 @@ def vgg_16_hed_cam(inputs, cams,
 
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
       with tf.variable_scope("cam-conv2"):
-        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 128, [1, 1], scope="cam-conv2")
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 128, [3, 3], scope="cam-conv2")
         net = net + cam_net
 
       if add_v1net and FLAGS.v1_timesteps:
@@ -547,7 +545,7 @@ def vgg_16_hed_cam(inputs, cams,
 
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
       with tf.variable_scope("cam-conv3"):
-        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 256, [1, 1], scope="cam-conv3")
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 256, [3, 3], scope="cam-conv3")
         net = net + cam_net
 
       if add_v1net and FLAGS.v1_timesteps:
@@ -563,7 +561,7 @@ def vgg_16_hed_cam(inputs, cams,
 
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
       with tf.variable_scope("cam-conv4"):
-        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 512, [1, 1], scope="cam-conv4")
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 512, [3, 3], scope="cam-conv4")
         net = net + cam_net
 
       if add_v1net and FLAGS.v1_timesteps:
@@ -579,7 +577,7 @@ def vgg_16_hed_cam(inputs, cams,
 
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
       with tf.variable_scope("cam-conv5"):
-        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 512, [1, 1], scope="cam-conv5")
+        cam_net = slim.repeat(cam_net, 1, slim.conv2d, 512, [3, 3], scope="cam-conv5")
         net = net + cam_net
 
       if add_v1net and FLAGS.v1_timesteps:
