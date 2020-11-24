@@ -25,6 +25,8 @@ flags.DEFINE_float("evaluate_every", 0.01,
                    "Evaluation frequency in epochs")
 flags.DEFINE_float("label_gamma", 0.4,
                    "Gamma for label consensus sampling")
+flags.DEFINE_float("label_lbda", 1.1,
+                   "Positive weight for wce")
 flags.DEFINE_integer("num_epochs", 100,
                      "Number of training epochs")
 flags.DEFINE_integer("train_batch_size", 1,
@@ -105,11 +107,13 @@ def model_fn(features, labels, mode, params):
 
   loss_fuse = weighted_ce_bdcn(logits=predictions,
                                labels=labels["label"],
-                               gamma=FLAGS.label_gamma)
+                               gamma=FLAGS.label_gamma,
+                               lbda=FLAGS.label_lbda)
   loss_side = weighted_ce_bdcn(logits=side_predictions,
                                labels=side_labels,
-                               gamma=FLAGS.label_gamma)
-  loss = 0.5 * loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.reduce_mean( 
+                               gamma=FLAGS.label_gamma,
+                               lbda=FLAGS.label_lbda)
+  loss = loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.reduce_mean( 
                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
                            if 'normalization' not in v.name and 'bias' not in v.name])
   
