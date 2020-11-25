@@ -341,12 +341,14 @@ class BSDSDataProvider:
     cam = tf.reshape(cam, (height, width, 1))
     img_mask = tf.concat([img, label, cam], axis=-1)
     if self.training:
+      tf.logging.info("Adding random cropping")
       img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
                                                 self.image_h+10, 
                                                 self.image_w+10)
       img_mask = tf.image.random_crop(img_mask, size=[self.image_h, 
                                                       self.image_w, 
-                                                      5])
+                                                      img_mask.shape.as_list()[-1]
+                                                      ])
     else:
       img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
                                                   self.image_h, 
@@ -356,6 +358,7 @@ class BSDSDataProvider:
                          axis=-1)[:3],
                          axis=-1)
     if self.training:
+      tf.logging.info("adding random brightness")
       img = tf.image.random_brightness(img, 
                                        max_delta=0.5) 
     img = tf.clip_by_value(img, 0, 1)

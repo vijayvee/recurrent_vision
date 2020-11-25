@@ -55,6 +55,8 @@ flags.DEFINE_string("base_dir", "bsds_experiments",
                     "Base directory to store experiments on GCS")
 flags.DEFINE_boolean("use_tpu", True,
                      "Whether to use TPU for training")
+flags.DEFINE_boolean("add_cam", False,
+                     "Whether to add CAM input")
 flags.DEFINE_boolean("evaluate", False,
                      "Whether to evaluate during training")
 flags.DEFINE_boolean("add_v1net_early", False,
@@ -86,7 +88,7 @@ def model_fn(features, labels, mode, params):
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early,
                           add_v1net=FLAGS.add_v1net,
-                          cam_net=True)
+                          cam_net=FLAGS.add_cam)
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
                                            cams=features["cam"],
@@ -158,11 +160,12 @@ def model_fn(features, labels, mode, params):
     loss_t = tf.reshape(loss, [1])
     loss_side_t = tf.reshape(loss_side, [1])
     loss_fuse_t = tf.reshape(loss_fuse, [1])
+    imgs_t = features["image"]
     labels_t = labels["label"]
     preds_t = tf.nn.sigmoid(predictions)
 
     def host_call_fn(gs, lr, fast_lr, loss, loss_side, loss_fuse, 
-	             lbls, preds):
+	             imgs, lbls, preds):
       """Training host call. Creates scalar summaries for training metrics.
       This function is executed on the CPU and should not directly reference
       any Tensors in the rest of the `model_fn`. To pass Tensors from the
@@ -190,11 +193,12 @@ def model_fn(features, labels, mode, params):
           tf.compat.v2.summary.scalar('training/fuse_loss',loss_fuse[0], step=gs)
           tf.compat.v2.summary.scalar('training/learning_rate',lr[0], step=gs)
           tf.compat.v2.summary.scalar('training/fast_learning_rate',fast_lr[0], step=gs)
+          tf.compat.v2.summary.image('training/images',imgs,step=gs)
           tf.compat.v2.summary.image('training/predictions',1-preds,step=gs)
           return tf.summary.all_v2_summary_ops()
 
     host_call_args = [gs_t, lr_t, fast_lr_t, loss_t, loss_side_t, 
-                      loss_fuse_t, labels_t, preds_t]
+                      loss_fuse_t, imgs_t, labels_t, preds_t]
     host_call = (host_call_fn, host_call_args)
 
   if mode == tf.estimator.ModeKeys.EVAL:
