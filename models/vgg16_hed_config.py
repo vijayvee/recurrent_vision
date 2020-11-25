@@ -12,11 +12,14 @@ class ConfigDict(object):
 
 def vgg_16_hed_config(vgg_depth=16, 
                       add_v1net_early=False, 
-                      add_v1net=False):
+                      add_v1net=False,
+                      cam_net=True):
   """Return configuration to build VGG."""
   config = ConfigDict()
   config.image_size = (321, 481)
   config.model_name = "vgg_16_hed"
+  if cam_net:
+    config.model_name = "vgg_16_hed_cam"
   config.vgg_depth = 16
   config.mean_rgb = mean_rgb_vgg
   base_ckpt_path = "models/pretrained_nets/checkpoints/"

@@ -85,7 +85,8 @@ def model_fn(features, labels, mode, params):
   host_call = None
   training = mode == tf.estimator.ModeKeys.TRAIN
   cfg = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early,
-                          add_v1net=FLAGS.add_v1net)
+                          add_v1net=FLAGS.add_v1net,
+                          cam_net=True)
   vgg = VGG(cfg)
   predictions, endpoints = vgg.build_model(images=features["image"],
                                            cams=features["cam"],
@@ -296,7 +297,7 @@ def main(argv):
   
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start=["^(?!.*side_output|.*v1net|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
+                                        vars_to_warm_start=["^(?!.*side_output|.*cam|.*v1net|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(

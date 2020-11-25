@@ -4,18 +4,18 @@ export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba
 NUM_EPOCHS=15
 LEARNING_RATE=5e-4
 WEIGHT_DECAY=1e-4
-LABEL_GAMMA=0.3
+LABEL_GAMMA=0.4
 TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
-IMAGE_SIZE=400
+IMAGE_SIZE=500
 V1_TIMESTEPS=$2
 CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="adam"
 EVALUATE_EVERY=1
 BASE_DIR="bsds_hpopt_multiv1net/hpopt3-training-timesteps-20k"
 USE_TPU=True
-ADD_V1NET_EARLY=True
-ADD_V1NET=True
+ADD_V1NET_EARLY=False
+ADD_V1NET=False
 TPU_NAME=$1
 PREPROCESS=True
 TRAIN_AND_EVAL=False
@@ -25,7 +25,7 @@ DATA_DIR="bsds_data/HED-BSDS/cam_tfrecords_float_gt"
 for RUN in 1 2
 do
 # wce_custom runs use the weighted_ce loss in losses.py
-EXPERIMENT_NAME="hed_60ksteps_wce_pixelwise_posweight5_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_gamma_${LABEL_GAMMA}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_run_${RUN}_tpu_${TPU_NAME}"
+EXPERIMENT_NAME="hed_cam_20ksteps_wce_pixelwise_posweight5_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_gamma_${LABEL_GAMMA}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_run_${RUN}_tpu_${TPU_NAME}"
 echo "Running ${EXPERIMENT_NAME} on ${1}"
 python main_bsds_wce.py \
        --learning_rate=${LEARNING_RATE} \

@@ -398,13 +398,9 @@ def vgg_16_hed(inputs, cams=None,
       scope, 'vgg_16', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.original_name_scope + '_end_points'
     # Collect outputs for conv2d, fully_connected and max_pool2d.
-    # TODO(vveerabadran): Where to add V1Net?
-    # TODO(vveerabadran): Should side outputs be output of V1Net?
     with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
-      # side_outputs.append(net)
-      # net = slim.max_pool2d(net, [2, 2], scope='pool1')
       if add_v1net_early and FLAGS.v1_timesteps:
         with tf.variable_scope("v1net-conv1"):
           v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
