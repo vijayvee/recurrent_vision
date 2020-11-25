@@ -94,12 +94,12 @@ def build_avgpool(inputs):
                                        strides=(h,w))
   return inputs
 
-def build_v1net(inputs, timesteps,
+def build_v1net_new(inputs, timesteps,
                 filters, kernel_size,
                 is_training=True, inh_mult=1.5,
                 exc_mult=3, v1_act='relu',
                 compact=False):
-  """Build V1Net layer.
+  """Build V1Net layer (functional impl).
   Args:
     inputs: Input tensor (n,h,w,c)
     timesteps: Integer Number of recurrent timesteps
@@ -137,11 +137,11 @@ def build_v1net(inputs, timesteps,
                     timesteps=timesteps,
                     training=is_training,
                     )
-  _, state = v1net_cell.build_v1net(inputs, state)
-  _, new_state_h = state[1]
+  _, new_state = v1net_cell.build_v1net(inputs, state)
+  _, new_state_h = new_state
   return new_state_h
 
-def build_v1net_stable(inputs, timesteps,
+def build_v1net(inputs, timesteps,
                 filters, kernel_size,
                 is_training=True, inh_mult=1.5,
                 exc_mult=3, v1_act='relu',
