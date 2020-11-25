@@ -31,8 +31,12 @@ flags.DEFINE_string("checkpoint_dir", "",
 flags.DEFINE_string("gcs_dir", "",
                     "Directory where checkpoints are "
                     "stored for a suite of models on GCS")
-flags.DEFINE_boolean("preprocess", False,
+flags.DEFINE_string("model_dir", "",
+                    "Single model directory to evaluate")
+flags.DEFINE_boolean("preprocess", True,
                      "Whether to add imagenet mean subtraction")
+flags.DEFINE_boolean("add_cam", False,
+                     "Whether to add CAM")
 flags.DEFINE_boolean("add_v1net_early", False,
                      "Whether to add V1Net")
 flags.DEFINE_boolean("add_v1net", False,
@@ -101,18 +105,19 @@ class Evaluator:
     self.checkpoint_dir = FLAGS.checkpoint_dir
     self.gcs_dir = FLAGS.gcs_dir
 
-  def build_model(self, images):
+  def build_model(self, images, cams):
     """Build imagenet classification model."""
     model_config = None
     if self.model_name.startswith("vgg_16_hed"):
       model_config = vgg_16_hed_config(add_v1net_early=FLAGS.add_v1net_early,
-                                       add_v1net=FLAGS.add_v1net)
+                                       add_v1net=FLAGS.add_v1net,
+                                       cam_net=FLAGS.add_cam)
     elif self.model_name.startswith("vgg_19"):
       model_config = vgg_config(vgg_depth=19)
     elif self.model_name.startswith("vgg_16"):
       model_config = vgg_config()
     self.model = VGG(model_config)
-    predictions, _ = self.model.build_model(images, cams=tf.ones_like(images),
+    predictions, _ = self.model.build_model(images, cams=cams,
                                             is_training=False,
                                             preprocess=FLAGS.preprocess)
     return predictions
@@ -123,18 +128,25 @@ class Evaluator:
       checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
     img_fns = tf.gfile.ListDirectory(in_dir)
     img_fns = [i for i in img_fns if "jpg" in i]
+    cam_fns = [i.replace("jpg", "npy") for i in img_fns]
     if not tf.gfile.Exists(out_dir):
       tf.gfile.MakeDirs(out_dir)
     with tf.Graph().as_default(), tf.Session() as sess:
       # Build and restore model
       images = tf.placeholder(tf.float32, [1, 321, 481, 3])
-      predictions = tf.nn.sigmoid(self.build_model(images))
+      cams = tf.placeholder(tf.float32, [1, 321, 481, 1])
+      predictions = tf.nn.sigmoid(self.build_model(images, cams))
       self.model.restore_checkpoint(sess, checkpoint)
       # Generate predictions
-      for img_fn in tqdm(img_fns):
+      for img_fn, cam_fn in tqdm(zip(img_fns, cam_fns)):
         img, transpose = load_image(os.path.join(in_dir, img_fn))
+        print(img.max())
+        cam = np.expand_dims(np.load(os.path.join(in_dir, cam_fn)), axis=(0, 3))
+        if transpose:
+          cam = np.transpose(cam, (0, 2, 1, 3))
         model_pred = sess.run(predictions, 
-                              feed_dict={images: img})
+                              feed_dict={images: img,
+                                         cams: cam})
         if transpose:
           model_pred = np.transpose(model_pred, 
                                     (0, 2, 1, 3))
@@ -148,6 +160,8 @@ class Evaluator:
     model_dirs = tf.gfile.ListDirectory(self.gcs_dir)
     model_dirs = [i for i in model_dirs 
                   if i.startswith("model_dir")]
+    if FLAGS.model_dir is not "":
+      model_dirs = [FLAGS.model_dir]
     tf.logging.info("Found %s model directories" % len(model_dirs))
     for m_d in model_dirs:
       print("Evaluating %s" % m_d)
@@ -161,6 +175,9 @@ class Evaluator:
       for checkpoint in checkpoints:
         # Don't evaluate checkpoint-0 (rand init)
         if "model.ckpt-0" in checkpoint:
+          continue
+        ckpt_idx = int(checkpoint.split('ckpt-')[1].split('.')[0])
+        if ckpt_idx % 10000:
           continue
         checkpoint = checkpoint.split(".meta")[0]
         sub_out_dir = os.path.join(out_dir, checkpoint)
@@ -184,7 +201,7 @@ class Evaluator:
       tf.gfile.MakeDirs(self.out_dir)
     outfile = os.path.join(
         self.out_dir, "evaluation_results_%s.txt" % self.model_name)
-    predictions  = self.build_model(images)
+    predictions  = self.build_model(images, cams=None)
     with tf.Session() as sess:
       self.model.restore_checkpoint(sess, self.checkpoint_dir)
       top_1_ct = tf.nn.in_top_k(predictions, labels, k=1)
