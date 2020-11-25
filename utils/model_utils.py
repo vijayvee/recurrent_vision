@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import tf_slim as slim   # pylint: disable=import-error
 from recurrent_vision.utils.horizontal_cells.v1net_cell import V1Net_BN_cell
+from recurrent_vision.utils.horizontal_cells.v1net_cell_fn import V1Net_functional_cell
 from recurrent_vision.utils.horizontal_cells.v1net_compact_cell import V1NetCompact
 tf.disable_v2_behavior()
 
@@ -94,6 +95,53 @@ def build_avgpool(inputs):
   return inputs
 
 def build_v1net(inputs, timesteps,
+                filters, kernel_size,
+                is_training=True, inh_mult=1.5,
+                exc_mult=3, v1_act='relu',
+                compact=False):
+  """Build V1Net layer.
+  Args:
+    inputs: Input tensor (n,h,w,c)
+    timesteps: Integer Number of recurrent timesteps
+    filters: Integer Number of filters
+    kernel_size: Integer Spatial convolution size
+    is_training: Boolean training flag
+    inh_mult: Float multiplier for 
+              inhibitory spatial convolution size
+    exc_mult: Float multiplier for 
+              excitatory spatial convolution size
+    v1_act: String activation function for v1net's output
+  Returns:
+    Applying V1Net layer to inputs
+  """
+  n, h, w, _ = inputs.shape.as_list()
+  ones = tf.ones([timesteps, 1, 1, 1, 1], 
+                 dtype=tf.float32)
+  v1net_input = ones * inputs
+  v1net_input = tf.transpose(v1net_input, [1, 0, 2, 3, 4])
+  state_c = tf.zeros([n, h, w, filters], 
+                     dtype=inputs.dtype, 
+                     name='init_c')
+  state_h = tf.zeros([n, h, w, filters], 
+                     dtype=inputs.dtype, 
+                     name='init_h')
+  state = tf.nn.rnn_cell.LSTMStateTuple(state_c, 
+                                        state_h)
+  cell = V1Net_functional_cell
+  tf.logging.info("Using functional implementation of v1net")
+  v1net_cell = cell(output_channels=filters,
+                    kernel_size=kernel_size,
+                    inh_mult=inh_mult,
+                    exc_mult=exc_mult,
+                    activation=v1_act,
+                    timesteps=timesteps,
+                    training=is_training,
+                    )
+  _, state = v1net_cell.build_v1net(inputs, state)
+  _, new_state_h = state[1]
+  return new_state_h
+
+def build_v1net_stable(inputs, timesteps,
                 filters, kernel_size,
                 is_training=True, inh_mult=1.5,
                 exc_mult=3, v1_act='relu',
