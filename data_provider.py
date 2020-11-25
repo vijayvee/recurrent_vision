@@ -340,16 +340,28 @@ class BSDSDataProvider:
     label = tf.reshape(label, (height, width, 1))
     cam = tf.reshape(cam, (height, width, 1))
     img_mask = tf.concat([img, label, cam], axis=-1)
-    img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
-                                                self.image_h, 
-                                                self.image_w)
+    if self.training:
+      img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
+                                                self.image_h+10, 
+                                                self.image_w+10)
+      img_mask = tf.image.random_crop(img_mask, size=[self.image_h, 
+                                                      self.image_w, 
+                                                      5])
+    else:
+      img_mask = tf.image.resize_with_crop_or_pad(img_mask, 
+                                                  self.image_h, 
+                                                  self.image_w)
     img = tf.stack(
               tf.unstack(img_mask, 
                          axis=-1)[:3],
                          axis=-1)
+    if self.training:
+      img = tf.image.random_brightness(img, 
+                                       max_delta=0.5) 
+    img = tf.clip_by_value(img, 0, 1)
     label = tf.unstack(img_mask, axis=-1)[3]
     label = tf.expand_dims(label, axis=2)
-    cam = tf.expand_dims(tf.unstack(img_mask, 
+    cam = tf.expand_dims(tf.unstack(img_mask,
                                     axis=-1)[4],
                          axis=2)
     return {"image": img, "cam": cam}, {"label": label}
