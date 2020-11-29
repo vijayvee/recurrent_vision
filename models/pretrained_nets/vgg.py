@@ -43,8 +43,8 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import tf_slim as slim  # pylint: disable=import-error
 
 from absl import flags
-from recurrent_vision.utils.model_utils import build_v1net, fuse_predictions
-
+from recurrent_vision.utils.model_utils import add_v1net_layer, build_v1net, fuse_predictions
+# TODO(vveeraba): Remove build_v1net import above, this must go through add_v1net_layer
 FLAGS = flags.FLAGS
 
 def vgg_arg_scope(weight_decay=0.0005):
@@ -397,82 +397,78 @@ def vgg_16_hed(inputs, cams=None,
   with tf.variable_scope(
       scope, 'vgg_16', [inputs], reuse=reuse) as sc:
     end_points_collection = sc.original_name_scope + '_end_points'
-    # Collect outputs for conv2d, fully_connected and max_pool2d.
-    with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
+    # Collect outputs for conv2d, max_pool2d.
+    with slim.arg_scope([slim.conv2d, slim.max_pool2d],
                         outputs_collections=end_points_collection):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
-      if add_v1net_early and FLAGS.v1_timesteps:
-        with tf.variable_scope("v1net-conv1"):
-          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 64
-          net = build_v1net(inputs=net, filters=n_filters, 
-                            timesteps=v1_timesteps, 
-                            kernel_size=v1_kernel_size,
-                            is_training=is_training)
-      side_outputs.append(net)
+      net = add_v1net_layer(net, is_training, add_v1net_early, 1)
+      with tf.variable_scope("dsn_convolution_1"):
+        dsn_1 = slim.conv2d(net, 1, [1, 1],
+                            activation_fn=None,
+                            normalizer_fn=None,
+                            )
+      side_outputs.append(dsn_1)
       net = slim.max_pool2d(net, [2, 2], scope='pool1')
 
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
-      if add_v1net and FLAGS.v1_timesteps:
-        with tf.variable_scope("v1net-conv2"):
-          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 128
-          net = build_v1net(inputs=net, filters=n_filters, 
-                            timesteps=v1_timesteps, 
-                            kernel_size=v1_kernel_size,
-                            is_training=is_training)
-      side_outputs.append(net)
+      net = add_v1net_layer(net, is_training, add_v1net, 2)
+      with tf.variable_scope("dsn_convolution_2"):
+        # TODO(vveeraba): Replace following with deconvolution
+        dsn_2 = tf.image.resize_bilinear(
+                  slim.conv2d(net, 1, [1, 1],
+                              activation_fn=None,
+                              normalizer_fn=None,
+                              ), [h, w]
+                            )
+      side_outputs.append(dsn_2)
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
       
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
-      if add_v1net and FLAGS.v1_timesteps:
-        with tf.variable_scope("v1net-conv3"):
-          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 256
-          net = build_v1net(inputs=net, filters=n_filters, 
-                            timesteps=v1_timesteps, 
-                            kernel_size=v1_kernel_size,
-                            is_training=is_training)
-      side_outputs.append(net)
+      net = add_v1net_layer(net, is_training, add_v1net, 3)
+      with tf.variable_scope("dsn_convolution_3"):
+        dsn_3 = tf.image.resize_bilinear(
+                  slim.conv2d(net, 1, [1, 1],
+                              activation_fn=None,
+                              normalizer_fn=None,
+                              ), [h, w])
+      side_outputs.append(dsn_3)
       net = slim.max_pool2d(net, [2, 2], scope='pool3')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
-      if add_v1net and FLAGS.v1_timesteps:
-        with tf.variable_scope("v1net-conv4"):
-          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
-          net = build_v1net(inputs=net, filters=n_filters, 
-                           timesteps=v1_timesteps, 
-                           kernel_size=v1_kernel_size,
-                           is_training=is_training)
-      side_outputs.append(net)
+      net = add_v1net_layer(net, is_training, add_v1net, 4)
+      with tf.variable_scope("dsn_convolution_4"):
+        dsn_4 = tf.image.resize_bilinear(
+                    slim.conv2d(net, 1, [1, 1],
+                                activation_fn=None,
+                                normalizer_fn=None,
+                                ), [h, w])
+      side_outputs.append(dsn_4)
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
-      if add_v1net and FLAGS.v1_timesteps:
-        with tf.variable_scope("v1net-conv5"):
-          v1_timesteps, v1_kernel_size, n_filters = FLAGS.v1_timesteps, 3, 512
-          net = build_v1net(inputs=net, filters=n_filters, 
-                           timesteps=v1_timesteps, 
-                           kernel_size=v1_kernel_size,
-                           is_training=is_training)
-      side_outputs.append(net)
+      net = add_v1net_layer(net, is_training, add_v1net, 5)
+      with tf.variable_scope("dsn_convolution_5"):
+        dsn_5 = tf.image.resize_bilinear(
+                    slim.conv2d(net, 1, [1, 1],
+                                activation_fn=None,
+                                normalizer_fn=None,
+                                ), [h, w])
+      side_outputs.append(dsn_5)
       end_points = slim.utils.convert_collection_to_dict(end_points_collection)
-      side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
-                              for side_output in side_outputs]
-      with tf.variable_scope("side_output_classifiers", reuse=reuse):
-        side_outputs_fullres = [slim.conv2d(side_output, 1, [1, 1],
-                                    activation_fn=None,
-                                    normalizer_fn=None,
-                                    )
-                                for side_output in side_outputs_fullres]
-      side_outputs_fullres = tf.stack(side_outputs_fullres, axis=0)
-      if reduce_conv:
-        with tf.variable_scope("side_output_fusion"):
-          side_outputs_ = tf.transpose(side_outputs_fullres, 
-                                            (1,2,3,4,0))
-          side_outputs_ = tf.squeeze(side_outputs_, axis=3)
-          fused_predictions = fuse_predictions(side_outputs_)
-      else:
-        fused_predictions = tf.reduce_mean(side_outputs_fullres, axis=0)
+      side_outputs = tf.stack(side_outputs, axis=0)
+
+      with tf.variable_scope("side_output_fusion"):
+        side_outputs_ = tf.squeeze(tf.transpose(side_outputs,
+                                                (1,2,3,4,0)),
+                                                axis=3)
+        fused_predictions = slim.conv2d(
+                              side_outputs_, 1, [1, 1],
+                              activation_fn=None,
+                              normalizer_fn=None,
+                              weights_initializer=tf.constant_initializer(0.2),
+                              )
       end_points['fused_predictions'] = fused_predictions
-      side_outputs_fullres = tf.reshape(side_outputs_fullres,
+      side_outputs_fullres = tf.reshape(side_outputs,
                                         (-1, h, w, 1))
       end_points['side_outputs_fullres'] = side_outputs_fullres
       return fused_predictions, end_points
@@ -585,8 +581,9 @@ def vgg_16_hed_cam(inputs, cams,
                            is_training=is_training)
       side_outputs.append(net)
       end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+      side_outputs_fullres = [side_outputs[0]]
       side_outputs_fullres = [tf.image.resize_bilinear(side_output, [h,w])
-                              for side_output in side_outputs]
+                              for side_output in side_outputs[1:]]
       with tf.variable_scope("side_output_classifiers", reuse=reuse):
         side_outputs_fullres = [slim.conv2d(side_output, 1, [1, 1],
                                     activation_fn=None,
