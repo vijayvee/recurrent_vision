@@ -13,7 +13,7 @@ class ConfigDict(object):
 def vgg_16_hed_config(vgg_depth=16, 
                       add_v1net_early=False, 
                       add_v1net=False,
-                      cam_net=True):
+                      cam_net=False):
   """Return configuration to build VGG."""
   config = ConfigDict()
   config.image_size = (321, 481)

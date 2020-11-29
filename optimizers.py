@@ -93,6 +93,7 @@ def get_optimizer(loss, learning_rate, vars=None, opt=None, use_tpu=True):
 def get_optimizer_bsds(loss, learning_rate, use_tpu=True):
   """Function to load a BSDS-HED optimizer."""
   lr_mult = {}
+  vars = list(tf.trainable_variables())
   early_weights = filter_variables(vars, ["vgg_16/conv[1-4]/conv[1-4]_[1-3]/weights"])
   early_biases = filter_variables(vars, ["vgg_16/conv[1-4]/conv[1-4]_[1-3]/biases"])
   late_weights = filter_variables(vars, ["vgg_16/conv5/conv5_[1-3]/weights"])
@@ -118,7 +119,7 @@ def get_optimizer_bsds(loss, learning_rate, use_tpu=True):
   for w_var, b_var in zip(fusion_weights, fusion_biases):
     lr_mult[w_var.name] = 0.001
     lr_mult[b_var.name] = 0.002
-  
+
   optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate,
                                          momentum=0.9,
                                          use_nesterov=False)

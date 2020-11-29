@@ -2,16 +2,16 @@
 export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba/src
 
 NUM_EPOCHS=15
-LEARNING_RATE=5e-4
+LEARNING_RATE=1e-6
 WEIGHT_DECAY=2e-4
-LABEL_GAMMA=0.4
+LABEL_GAMMA=0.3
 LABEL_LBDA=1.1
 TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
 IMAGE_SIZE=512
 V1_TIMESTEPS=$2
 CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
-OPTIMIZER="adam"
+OPTIMIZER="bsds_momentum"
 EVALUATE_EVERY=1
 BASE_DIR="bsds_hpopt_multiv1net/hpopt3-training-timesteps-20k"
 USE_TPU=True
@@ -24,7 +24,7 @@ NUM_CORES=8
 DATA_DIR="bsds_data/HED-BSDS/cam_tfrecords_float_gt"
 
 # wce_custom runs use the weighted_ce loss in losses.py
-EXPERIMENT_NAME="randaug_delta_0_25_hed_wce_side_0_5_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_gamma_${LABEL_GAMMA}_lbda_${LABEL_LBDA}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_tpu_${TPU_NAME}"
+EXPERIMENT_NAME="randaug_modulat_hed_wce_side_0_5_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_gamma_${LABEL_GAMMA}_lbda_${LABEL_LBDA}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_tpu_${TPU_NAME}"
 echo "Running ${EXPERIMENT_NAME} on ${1}"
 python main_bsds_wce.py \
        --learning_rate=${LEARNING_RATE} \

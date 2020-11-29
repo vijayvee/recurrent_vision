@@ -302,7 +302,7 @@ def main(argv):
   
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start=["^(?!.*side_output|.*cam|.*v1net|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
+                                        vars_to_warm_start=["^(?!.*side_output|.*dsn|.*cam|.*v1net|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
