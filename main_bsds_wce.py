@@ -134,22 +134,23 @@ def model_fn(features, labels, mode, params):
                                              steps_per_epoch,
                                              decay_factor=0.1,
                                              decay_steps=10000)
-
-    optimizer = get_optimizer(learning_rate,
-                              FLAGS.optimizer,
-                              FLAGS.use_tpu)
     slow_vars = [var for var in vgg.model_vars 
                     if "v1net" not in var.name]
-
     fast_vars = list(set(vgg.model_vars).difference(set(slow_vars)))
-    fast_optimizer = get_optimizer(fast_learning_rate,
-                                   FLAGS.optimizer,
-                                   FLAGS.use_tpu)
+    train_op = get_optimizer(loss, learning_rate,
+                             vars=slow_vars,
+                             opt=FLAGS.optimizer,
+                             use_tpu=FLAGS.use_tpu)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)
+    # train_op = optimizer.minimize(loss, global_step, var_list=slow_vars)
 
     if FLAGS.v1_timesteps:
-      fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
+      fast_train_op = get_optimizer(loss, 
+                                    fast_learning_rate,
+                                    vars=fast_vars,
+                                    opt=FLAGS.optimizer,
+                                    use_tpu=FLAGS.use_tpu)
+      # fast_train_op = fast_optimizer.minimize(loss, global_step, var_list=fast_vars)
       train_op = tf.group([train_op, update_ops, fast_train_op])
     else:
       train_op = tf.group([train_op, update_ops])
