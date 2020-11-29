@@ -3,10 +3,13 @@
 import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import tf_slim as slim   # pylint: disable=import-error
+from absl import flags
 from recurrent_vision.utils.horizontal_cells.v1net_cell import V1Net_BN_cell
 from recurrent_vision.utils.horizontal_cells.v1net_cell_fn import V1Net_functional_cell
 from recurrent_vision.utils.horizontal_cells.v1net_compact_cell import V1NetCompact
 tf.disable_v2_behavior()
+
+FLAGS = flags.FLAGS
 
 def fuse_predictions(inputs, is_training=True):
   """Build 1x1 convolution for side output fusion (HED)."""
@@ -16,7 +19,6 @@ def fuse_predictions(inputs, is_training=True):
                             kernel_size=1,
                             strides=(1,1),
                             padding='same',
-                            use_bias=False,
                             kernel_initializer=initializer,
                             )
   return inputs
@@ -195,6 +197,21 @@ def build_v1net(inputs, timesteps,
                                 )
   _, new_state_h = v1net_out[1]
   return new_state_h
+
+def add_v1net_layer(net, is_training=True, 
+                    add_v1net=True, 
+                    v1net_idx=0):
+  """Function to add v1net layer."""
+  if add_v1net and FLAGS.v1_timesteps:
+    with tf.variable_scope("v1net-conv%s" % v1net_idx):
+      n_filters = int(net.shape.as_list()[-1])
+      v1_timesteps, v1_kernel_size = FLAGS.v1_timesteps, 3
+      net = build_v1net(inputs=net, 
+                        filters=n_filters, 
+                        timesteps=v1_timesteps, 
+                        kernel_size=v1_kernel_size,
+                        is_training=is_training)
+  return net
 
 def build_dense(inputs,
                 units):
