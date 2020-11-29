@@ -360,7 +360,7 @@ class BSDSDataProvider:
     if self.training:
       tf.logging.info("adding random brightness")
       img = tf.image.random_brightness(img, 
-                                       max_delta=0.5) 
+                                       max_delta=0.2) 
     img = tf.clip_by_value(img, 0, 1)
     label = tf.unstack(img_mask, axis=-1)[3]
     label = tf.expand_dims(label, axis=2)

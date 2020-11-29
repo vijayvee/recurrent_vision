@@ -3,11 +3,12 @@ export PYTHONPATH=$PYTHONPATH:/home/vveeraba/src/recurrent_vision:/home/vveeraba
 
 NUM_EPOCHS=15
 LEARNING_RATE=5e-4
-WEIGHT_DECAY=1e-4
+WEIGHT_DECAY=2e-4
 LABEL_GAMMA=0.4
+LABEL_LBDA=1.1
 TRAIN_BATCH_SIZE=8
 EVAL_BATCH_SIZE=8
-IMAGE_SIZE=500
+IMAGE_SIZE=512
 V1_TIMESTEPS=$2
 CHECKPOINT="gs://v1net-tpu-bucket/checkpoints/vgg_16/vgg_16.ckpt"
 OPTIMIZER="adam"
@@ -22,10 +23,8 @@ TRAIN_AND_EVAL=False
 NUM_CORES=8
 DATA_DIR="bsds_data/HED-BSDS/cam_tfrecords_float_gt"
 
-for RUN in 1 2
-do
 # wce_custom runs use the weighted_ce loss in losses.py
-EXPERIMENT_NAME="hed_cam_20ksteps_wce_pixelwise_posweight5_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_gamma_${LABEL_GAMMA}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_run_${RUN}_tpu_${TPU_NAME}"
+EXPERIMENT_NAME="randaug_delta_0_25_hed_wce_side_0_5_lr_${LEARNING_RATE}_wd_${WEIGHT_DECAY}_gamma_${LABEL_GAMMA}_lbda_${LABEL_LBDA}_opt_${OPTIMIZER}_preprocess_${PREPROCESS}_timesteps_${V1_TIMESTEPS}_tpu_${TPU_NAME}"
 echo "Running ${EXPERIMENT_NAME} on ${1}"
 python main_bsds_wce.py \
        --learning_rate=${LEARNING_RATE} \
@@ -49,4 +48,3 @@ python main_bsds_wce.py \
        --train_and_eval=${TRAIN_AND_EVAL} \
        --num_cores=${NUM_CORES} \
        --data_dir=${DATA_DIR}  
-done

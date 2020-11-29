@@ -116,7 +116,7 @@ def model_fn(features, labels, mode, params):
                                labels=side_labels,
                                gamma=FLAGS.label_gamma,
                                lbda=FLAGS.label_lbda)
-  loss = loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.reduce_mean( 
+  loss = 0.5 * loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.reduce_mean( 
                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
                            if 'normalization' not in v.name and 'bias' not in v.name])
   
