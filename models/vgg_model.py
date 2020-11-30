@@ -43,7 +43,7 @@ class VGG(ModelBuilder):
       model_fn = vgg.vgg_16
 
     all_vars = [var for var in tf.global_variables()]
-    with slim.arg_scope(vgg.vgg_arg_scope()):
+    with slim.arg_scope(vgg.vgg_arg_scope(is_training)):
       net, endpoints = model_fn(inputs=net,
                                 cams=cam_net,
                                 num_classes=model_config.num_classes,

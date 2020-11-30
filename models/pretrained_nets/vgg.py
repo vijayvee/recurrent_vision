@@ -47,7 +47,7 @@ from recurrent_vision.utils.model_utils import add_v1net_layer, build_v1net, fus
 # TODO(vveeraba): Remove build_v1net import above, this must go through add_v1net_layer
 FLAGS = flags.FLAGS
 
-def vgg_arg_scope(weight_decay=0.0005):
+def vgg_arg_scope(is_training, weight_decay=0.0005):
   """Defines the VGG arg scope.
 
   Args:
@@ -59,12 +59,8 @@ def vgg_arg_scope(weight_decay=0.0005):
   with slim.arg_scope([slim.conv2d, slim.fully_connected],
                       activation_fn=tf.nn.relu,
                       # weights_regularizer=slim.l2_regularizer(weight_decay),
-
                       biases_initializer=tf.zeros_initializer()):
-    with slim.arg_scope([slim.conv2d], padding='SAME',
-                        normalizer_fn=slim.batch_norm,
-                        normalizer_params={'is_training': is_training},
-                        ) as arg_sc:
+    with slim.arg_scope([slim.conv2d], padding='SAME') as arg_sc:
       return arg_sc
 
 
@@ -407,6 +403,7 @@ def vgg_16_hed(inputs, cams=None,
                         ):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       net = add_v1net_layer(net, is_training, add_v1net_early, 1)
+      net = tf.layers.batch_normalization(net, training=is_training)
       with tf.variable_scope("dsn_convolution_1"):
         dsn_1 = slim.conv2d(net, 1, [1, 1],
                             activation_fn=None,
@@ -417,6 +414,7 @@ def vgg_16_hed(inputs, cams=None,
 
       net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
       net = add_v1net_layer(net, is_training, add_v1net, 2)
+      net = tf.layers.batch_normalization(net, training=is_training)
       with tf.variable_scope("dsn_convolution_2"):
         # TODO(vveeraba): Replace following with deconvolution
         dsn_2 = resize_and_crop(
@@ -429,6 +427,7 @@ def vgg_16_hed(inputs, cams=None,
       
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
       net = add_v1net_layer(net, is_training, add_v1net, 3)
+      net = tf.layers.batch_normalization(net, training=is_training)
       with tf.variable_scope("dsn_convolution_3"):
         dsn_3 = resize_and_crop(
                   slim.conv2d(net, 1, [1, 1],
@@ -440,6 +439,7 @@ def vgg_16_hed(inputs, cams=None,
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
       net = add_v1net_layer(net, is_training, add_v1net, 4)
+      net = tf.layers.batch_normalization(net, training=is_training)
       with tf.variable_scope("dsn_convolution_4"):
         dsn_4 = resize_and_crop(
                     slim.conv2d(net, 1, [1, 1],
@@ -451,6 +451,7 @@ def vgg_16_hed(inputs, cams=None,
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
       net = add_v1net_layer(net, is_training, add_v1net, 5)
+      net = tf.layers.batch_normalization(net, training=is_training)
       with tf.variable_scope("dsn_convolution_5"):
         dsn_5 = resize_and_crop(
                     slim.conv2d(net, 1, [1, 1],
