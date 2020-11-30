@@ -81,7 +81,7 @@ def get_optimizer(loss, learning_rate, vars=None, opt=None, use_tpu=True):
                                            use_nesterov=False)
   elif opt == 'bsds_momentum':
     del vars  # unused here
-    train_op = get_optimizer_bsds(loss, learning_rate, use_tpu)
+    train_op = get_optimizer_bsds(loss, learning_rate, use_tpu, global_step)
 
   if not train_op:
     if use_tpu:
@@ -90,7 +90,7 @@ def get_optimizer(loss, learning_rate, vars=None, opt=None, use_tpu=True):
   return train_op
 
 
-def get_optimizer_bsds(loss, learning_rate, use_tpu=True):
+def get_optimizer_bsds(loss, learning_rate, use_tpu=True, global_step=None):
   """Function to load a BSDS-HED optimizer."""
   lr_mult = {}
   vars = list(tf.trainable_variables())
@@ -130,5 +130,5 @@ def get_optimizer_bsds(loss, learning_rate, use_tpu=True):
   for grad, var in grads_vars:
     grad = grad * lr_mult[var.name]
     grads_vars_mult.append((grad, var))
-  train_op = optimizer.apply_gradients(grads_vars_mult)
+  train_op = optimizer.apply_gradients(grads_vars_mult, global_step)
   return train_op
