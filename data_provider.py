@@ -362,8 +362,8 @@ class BSDSDataProvider:
       img = tf.image.random_brightness(img, 
                                        max_delta=0.25)
       img = tf.image.random_contrast(img, 0.75, 1.25)
-      img = tf.image.random_hue(img, 0.25)
-      img = tf.image.random_saturation(img, 0.25, 1.25)
+      img = tf.image.random_hue(img, max_delta=0.25)
+      img = tf.image.random_saturation(img, 0.75, 1.25)
     img = tf.clip_by_value(img, 0, 1)
     label = tf.unstack(img_mask, axis=-1)[3]
     label = tf.expand_dims(label, axis=2)
