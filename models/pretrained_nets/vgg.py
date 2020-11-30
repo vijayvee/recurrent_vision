@@ -43,7 +43,7 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 import tf_slim as slim  # pylint: disable=import-error
 
 from absl import flags
-from recurrent_vision.utils.model_utils import add_v1net_layer, build_v1net, fuse_predictions
+from recurrent_vision.utils.model_utils import add_v1net_layer, build_v1net, fuse_predictions, resize_and_crop
 # TODO(vveeraba): Remove build_v1net import above, this must go through add_v1net_layer
 FLAGS = flags.FLAGS
 
@@ -414,45 +414,44 @@ def vgg_16_hed(inputs, cams=None,
       net = add_v1net_layer(net, is_training, add_v1net, 2)
       with tf.variable_scope("dsn_convolution_2"):
         # TODO(vveeraba): Replace following with deconvolution
-        dsn_2 = tf.image.resize_bilinear(
+        dsn_2 = resize_and_crop(
                   slim.conv2d(net, 1, [1, 1],
                               activation_fn=None,
                               normalizer_fn=None,
-                              ), [h, w]
-                            )
+                              ), 2, h, w)
       side_outputs.append(dsn_2)
       net = slim.max_pool2d(net, [2, 2], scope='pool2')
       
       net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
       net = add_v1net_layer(net, is_training, add_v1net, 3)
       with tf.variable_scope("dsn_convolution_3"):
-        dsn_3 = tf.image.resize_bilinear(
+        dsn_3 = resize_and_crop(
                   slim.conv2d(net, 1, [1, 1],
                               activation_fn=None,
                               normalizer_fn=None,
-                              ), [h, w])
+                              ), 4, h, w)
       side_outputs.append(dsn_3)
       net = slim.max_pool2d(net, [2, 2], scope='pool3')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
       net = add_v1net_layer(net, is_training, add_v1net, 4)
       with tf.variable_scope("dsn_convolution_4"):
-        dsn_4 = tf.image.resize_bilinear(
+        dsn_4 = resize_and_crop(
                     slim.conv2d(net, 1, [1, 1],
                                 activation_fn=None,
                                 normalizer_fn=None,
-                                ), [h, w])
+                                ), 8, h, w)
       side_outputs.append(dsn_4)
       net = slim.max_pool2d(net, [2, 2], scope='pool4')
       
       net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
       net = add_v1net_layer(net, is_training, add_v1net, 5)
       with tf.variable_scope("dsn_convolution_5"):
-        dsn_5 = tf.image.resize_bilinear(
+        dsn_5 = resize_and_crop(
                     slim.conv2d(net, 1, [1, 1],
                                 activation_fn=None,
                                 normalizer_fn=None,
-                                ), [h, w])
+                                ), 16, h, w)
       side_outputs.append(dsn_5)
       end_points = slim.utils.convert_collection_to_dict(end_points_collection)
       side_outputs = tf.stack(side_outputs, axis=0)

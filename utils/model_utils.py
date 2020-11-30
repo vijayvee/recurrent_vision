@@ -257,3 +257,33 @@ def build_hed_output(side_outputs,
   side_outputs_fullres = tf.reshape(side_outputs_fullres,
                                     (-1, height, width, 1))
   return fused_predictions, side_outputs_fullres
+
+def get_upsampling_weight(in_channels=1, out_channels=1, kernel_size=4):
+  """Make a 2D bilinear kernel suitable for upsampling"""
+  factor = (kernel_size + 1) // 2
+  if kernel_size % 2 == 1:
+    center = factor - 1
+  else:
+    center = factor - 0.5
+  og = np.ogrid[:kernel_size, :kernel_size]
+  filt = (1 - abs(og[0] - center) / factor) * \
+          (1 - abs(og[1] - center) / factor)
+  weight = np.zeros((in_channels, out_channels, kernel_size, kernel_size),
+                    dtype=np.float64)
+  weight[range(in_channels), range(out_channels), :, :] = filt
+  weight = np.transpose(weight, (2, 3, 0, 1))
+  return np.float32(weight)
+
+def resize_and_crop(net, scale, height, width):
+  """Function to resize with conv2d_transpose 
+  and crop to [height, width] dimensions."""
+  weights_upsample = get_upsampling_weight(kernel_size=scale*2)
+  weights_init = tf.constant_initializer(value=weights_upsample)
+  net = slim.conv2d_transpose(net, 1, scale*2, stride=scale,
+                              weights_initializer=weights_init,
+                              biases_initializer=tf.constant_initializer(0.),
+                              activation_fn=None, normalizer_fn=None,
+                              trainable=False)
+  _, h, w, _ = net.shape.as_list()
+  assert (h, w) == (height, width)
+  return net
