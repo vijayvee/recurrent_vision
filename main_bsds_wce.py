@@ -116,7 +116,7 @@ def model_fn(features, labels, mode, params):
                                labels=side_labels,
                                gamma=FLAGS.label_gamma,
                                lbda=FLAGS.label_lbda)
-  loss = 0.5 * loss_side + 1.1 * loss_fuse + FLAGS.weight_decay * tf.math.add_n( 
+  loss = loss_side + loss_fuse + FLAGS.weight_decay * tf.math.add_n( 
                [tf.nn.l2_loss(v) for v in tf.trainable_variables()
                            if 'normalization' not in v.name and 'bias' not in v.name])
   
@@ -302,7 +302,7 @@ def main(argv):
   
   warm_start_settings = tf.estimator.WarmStartSettings(
                                         ckpt_to_initialize_from=args['checkpoint'],
-                                        vars_to_warm_start=["^(?!.*side_output|.*dsn|.*cam|.*v1net|.*Momentum|global_step|beta*|gamma*|.*Adam)"],
+                                        vars_to_warm_start=["^(?!.*side_output|.*dsn|.*cam|.*v1net|.*Momentum|global_step|.*batch_normalization|.*Adam|.*beta|.*gamma)"],
                                         )
 
   tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(

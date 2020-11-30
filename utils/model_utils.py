@@ -285,5 +285,6 @@ def resize_and_crop(net, scale, height, width):
                               activation_fn=None, normalizer_fn=None,
                               trainable=False)
   _, h, w, _ = net.shape.as_list()
-  assert (h, w) == (height, width)
+  if (h, w) != (height, width):
+    net = tf.image.resize_with_crop_or_pad(net, height, width)
   return net
