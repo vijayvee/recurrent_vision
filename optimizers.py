@@ -79,10 +79,10 @@ def get_optimizer(loss, learning_rate, vars=None, opt=None, use_tpu=True):
     optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate,
                                            momentum=0.9,
                                            use_nesterov=False)
-  elif opt == 'bsds_momentum':
+  elif opt.startswith('bsds'):
     del vars  # unused here
-    train_op = get_optimizer_bsds(loss, learning_rate, use_tpu, global_step)
-
+    train_op = get_optimizer_bsds(loss, opt, learning_rate, 
+                                  use_tpu, global_step)
   if not train_op:
     if use_tpu:
       optimizer = tf.tpu.CrossShardOptimizer(optimizer)
@@ -90,7 +90,8 @@ def get_optimizer(loss, learning_rate, vars=None, opt=None, use_tpu=True):
   return train_op
 
 
-def get_optimizer_bsds(loss, learning_rate, use_tpu=True, global_step=None):
+def get_optimizer_bsds(loss, opt, learning_rate, 
+                       use_tpu=True, global_step=None):
   """Function to load a BSDS-HED optimizer."""
   lr_mult = {}
   vars = list(tf.trainable_variables())
@@ -119,10 +120,12 @@ def get_optimizer_bsds(loss, learning_rate, use_tpu=True, global_step=None):
   for w_var, b_var in zip(fusion_weights, fusion_biases):
     lr_mult[w_var.name] = 0.001
     lr_mult[b_var.name] = 0.002
-
-  optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate,
-                                         momentum=0.9,
-                                         use_nesterov=False)
+  if opt.startswith("bsds_momentum"):
+    optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate,
+                                          momentum=0.9,
+                                          use_nesterov=False)
+  elif opt.startswith("bsds_adam"):
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
   if use_tpu:
     optimizer = tf.tpu.CrossShardOptimizer(optimizer)
   grads_vars = optimizer.compute_gradients(loss)
