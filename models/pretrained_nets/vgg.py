@@ -59,8 +59,12 @@ def vgg_arg_scope(weight_decay=0.0005):
   with slim.arg_scope([slim.conv2d, slim.fully_connected],
                       activation_fn=tf.nn.relu,
                       # weights_regularizer=slim.l2_regularizer(weight_decay),
+
                       biases_initializer=tf.zeros_initializer()):
-    with slim.arg_scope([slim.conv2d], padding='SAME') as arg_sc:
+    with slim.arg_scope([slim.conv2d], padding='SAME',
+                        normalizer_fn=slim.batch_norm,
+                        normalizer_params={'is_training': is_training},
+                        ) as arg_sc:
       return arg_sc
 
 
@@ -400,8 +404,6 @@ def vgg_16_hed(inputs, cams=None,
     # Collect outputs for conv2d, max_pool2d.
     with slim.arg_scope([slim.conv2d, slim.max_pool2d],
                         outputs_collections=end_points_collection,
-                        normalizer_fn=slim.batch_norm,
-                        normalizer_params={'is_training': is_training},
                         ):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       net = add_v1net_layer(net, is_training, add_v1net_early, 1)
