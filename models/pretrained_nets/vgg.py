@@ -399,7 +399,10 @@ def vgg_16_hed(inputs, cams=None,
     end_points_collection = sc.original_name_scope + '_end_points'
     # Collect outputs for conv2d, max_pool2d.
     with slim.arg_scope([slim.conv2d, slim.max_pool2d],
-                        outputs_collections=end_points_collection):
+                        outputs_collections=end_points_collection,
+                        normalizer_fn=slim.batch_norm,
+                        normalizer_params={'is_training': is_training},
+                        ):
       net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
       net = add_v1net_layer(net, is_training, add_v1net_early, 1)
       with tf.variable_scope("dsn_convolution_1"):
